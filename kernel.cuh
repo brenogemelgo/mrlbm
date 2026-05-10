@@ -43,22 +43,21 @@ __global__ void streamCollide(
     }
     else
     {
-        // calculate moments at interior
         rho = static_cast<real_t>(0);
-        real_t jx = static_cast<real_t>(0);
-        real_t jy = static_cast<real_t>(0);
-        real_t jz = static_cast<real_t>(0);
-        real_t hxxSum = static_cast<real_t>(0);
-        real_t hyySum = static_cast<real_t>(0);
-        real_t hzzSum = static_cast<real_t>(0);
-        real_t hxySum = static_cast<real_t>(0);
-        real_t hxzSum = static_cast<real_t>(0);
-        real_t hyzSum = static_cast<real_t>(0);
+        ux = static_cast<real_t>(0);
+        uy = static_cast<real_t>(0);
+        uz = static_cast<real_t>(0);
+        mxx = static_cast<real_t>(0);
+        myy = static_cast<real_t>(0);
+        mzz = static_cast<real_t>(0);
+        mxy = static_cast<real_t>(0);
+        mxz = static_cast<real_t>(0);
+        myz = static_cast<real_t>(0);
 
+        // calculate moments at interior
         constexpr_for<static_cast<natural_t>(0), static_cast<natural_t>(Q)>(
-            [&](const auto qConst) noexcept
+            [&](const auto q) noexcept
             {
-                constexpr natural_t q = qConst();
                 constexpr int cxi = CX[q];
                 constexpr int cyi = CY[q];
                 constexpr int czi = CZ[q];
@@ -98,31 +97,31 @@ __global__ void streamCollide(
                 const real_t cu = cx * ux_s + cy * uy_s + cz * uz_s;
                 const real_t mh = mxx_s * hxx + myy_s * hyy + mzz_s * hzz + mxy_s * hxy + mxz_s * hxz + myz_s * hyz;
 
-                const real_t fq = w * rho_s * (static_cast<real_t>(1) + cu + mh);
+                const real_t f_hat = w * rho_s * (static_cast<real_t>(1) + cu + mh);
 
-                rho += fq;
-                jx += fq * cx;
-                jy += fq * cy;
-                jz += fq * cz;
-                hxxSum += fq * hxx;
-                hyySum += fq * hyy;
-                hzzSum += fq * hzz;
-                hxySum += fq * hxy;
-                hxzSum += fq * hxz;
-                hyzSum += fq * hyz;
+                rho += f_hat;
+                ux += f_hat * cx;
+                uy += f_hat * cy;
+                uz += f_hat * cz;
+                mxx += f_hat * hxx;
+                myy += f_hat * hyy;
+                mzz += f_hat * hzz;
+                mxy += f_hat * hxy;
+                mxz += f_hat * hxz;
+                myz += f_hat * hyz;
             });
 
         const real_t invRho = static_cast<real_t>(1) / rho;
 
-        ux = jx * invRho;
-        uy = jy * invRho;
-        uz = jz * invRho;
-        mxx = hxxSum * invRho;
-        myy = hyySum * invRho;
-        mzz = hzzSum * invRho;
-        mxy = hxySum * invRho;
-        mxz = hxzSum * invRho;
-        myz = hyzSum * invRho;
+        ux *= invRho;
+        uy *= invRho;
+        uz *= invRho;
+        mxx *= invRho;
+        myy *= invRho;
+        mzz *= invRho;
+        mxy *= invRho;
+        mxz *= invRho;
+        myz *= invRho;
     }
 
     // scale

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-nvcc -std=c++20 -O3 --restrict main.cu -o mrlbm
+nvcc -std=c++20 -O3 --restrict -arch=sm_86 -lineinfo -Xptxas -v main.cu -o mrlbm
 ./mrlbm

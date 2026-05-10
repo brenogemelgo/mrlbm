@@ -7,7 +7,7 @@
 #include <iostream>
 #include <utility>
 
-#define BENCHMARK
+// #define BENCHMARK
 
 #define CUDA_CHECK(call)                                                         \
     do                                                                           \
@@ -40,33 +40,44 @@ int main()
     CUDA_CHECK(cudaDeviceSynchronize());
 
     const auto start = std::chrono::high_resolution_clock::now();
+    auto lastStamp = start;
+    natural_t lastStampStep = 0;
 
     for (natural_t t = 0; t < NSTEPS; ++t)
     {
         streamCollide<<<grid, block>>>(moments, dbuffer);
-#ifndef BENCHMARK
-        CUDA_CHECK(cudaGetLastError());
-#endif
         std::swap(moments, dbuffer);
 
 #ifndef BENCHMARK
         if ((t + 1) % STAMP == 0)
         {
+            CUDA_CHECK(cudaDeviceSynchronize());
+
+            const auto now = std::chrono::high_resolution_clock::now();
+            const std::chrono::duration<double> stampElapsed = now - lastStamp;
+
+            const natural_t stampSteps = (t + 1) - lastStampStep;
+            const double stampMlups = static_cast<double>(CELLS) * static_cast<double>(stampSteps) / stampElapsed.count() / static_cast<double>(1000000);
+
+            std::cout << std::endl;
             std::cout << "step " << (t + 1) << " / " << NSTEPS << std::endl;
+            std::cout << "MLUPS: " << stampMlups << std::endl;
+
             writeOutput(moments, t + 1);
+
+            lastStamp = std::chrono::high_resolution_clock::now();
+            lastStampStep = t + 1;
         }
 #endif
     }
 
-#ifndef BENCHMARK
-    CUDA_CHECK(cudaGetLastError());
-#endif
     CUDA_CHECK(cudaDeviceSynchronize());
 
     const auto end = std::chrono::high_resolution_clock::now();
     const std::chrono::duration<double> elapsed = end - start;
     const double mlups = static_cast<double>(CELLS) * static_cast<double>(NSTEPS) / elapsed.count() / static_cast<double>(1000000);
 
+    std::cout << std::endl;
     std::cout << "elapsed: " << elapsed.count() << " s" << std::endl;
     std::cout << "MLUPS: " << mlups << std::endl;
 
