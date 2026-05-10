@@ -25,35 +25,27 @@ __device__ [[nodiscard]] static inline natural_t midx(
     return idx(tx, ty, tz, bx, by, bz) + CELLS * field;
 }
 
-__device__ __host__ [[nodiscard]] static inline natural_t cellIdx(
-    const natural_t x,
-    const natural_t y,
-    const natural_t z) noexcept
-{
-    return x + NX * (y + NY * z);
-}
-
 __device__ __host__ [[nodiscard]] static inline natural_t momentIdx(
-    const natural_t m,
-    const natural_t cell) noexcept
+    const natural_t field,
+    const natural_t id) noexcept
 {
-    return m * CELLS + cell;
+    return id + CELLS * field;
 }
 
 __device__ __host__ [[nodiscard]] static inline real_t &moment(
     real_t *moments,
-    const natural_t m,
-    const natural_t cell) noexcept
+    const natural_t field,
+    const natural_t id) noexcept
 {
-    return moments[momentIdx(m, cell)];
+    return moments[momentIdx(field, id)];
 }
 
 __device__ __host__ [[nodiscard]] static inline const real_t &moment(
     const real_t *moments,
-    const natural_t m,
-    const natural_t cell) noexcept
+    const natural_t field,
+    const natural_t id) noexcept
 {
-    return moments[momentIdx(m, cell)];
+    return moments[momentIdx(field, id)];
 }
 
 template <typename T, T v>
@@ -74,12 +66,12 @@ struct IntegralConstant
     }
 };
 
-template <const label_t Start, const label_t End, typename F>
+template <const natural_t Start, const natural_t End, typename F>
 __device__ inline constexpr void constexpr_for(F &&f) noexcept
 {
     if constexpr (Start < End)
     {
-        f(IntegralConstant<label_t, Start>());
+        f(IntegralConstant<natural_t, Start>());
         if constexpr (Start + 1 < End)
         {
             constexpr_for<Start + 1, End>(std::forward<F>(f));

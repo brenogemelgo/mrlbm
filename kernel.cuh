@@ -1,10 +1,11 @@
 #pragma once
 
-#include "constants.cuh"
+#include "deviceFunctions.cuh"
+#include "bitmasks.cuh"
 
 __global__ void streamCollide(
-    real_t *moments,
-    const unsigned int *dNodeType)
+    const real_t *__restrict__ moments,
+    real_t *__restrict__ dbuffer)
 {
     const natural_t tx = threadIdx.x;
     const natural_t ty = threadIdx.y;
@@ -21,7 +22,7 @@ __global__ void streamCollide(
     }
     const natural_t idx_ = idx(tx, ty, tz, bx, by, bz);
 
-    // read from global memory
+    // load moments
     real_t rho = moments[idx_ + CELLS * RHO];
     real_t ux = moments[idx_ + CELLS * UX];
     real_t uy = moments[idx_ + CELLS * UY];
@@ -34,11 +35,11 @@ __global__ void streamCollide(
     real_t myz = moments[idx_ + CELLS * MYZ];
 
     // check if boundary or interior
-    const unsigned int nodeType = dNodeType[idx_];
+    const unsigned int nodeType = boundaryMask(x, y, z);
     if (nodeType != BULK)
     {
         // calculate moments at boundary
-#include CAVITY_BC
+#include "cavityBC.cuh"
     }
     else
     {
@@ -54,10 +55,10 @@ __global__ void streamCollide(
         real_t hxzSum = static_cast<real_t>(0);
         real_t hyzSum = static_cast<real_t>(0);
 
-        constexpr_for<static_cast<label_t>(0), static_cast<label_t>(Q)>(
-            [&](auto qConst) noexcept
+        constexpr_for<static_cast<natural_t>(0), static_cast<natural_t>(Q)>(
+            [&](const auto qConst) noexcept
             {
-                constexpr label_t q = qConst();
+                constexpr natural_t q = qConst();
                 constexpr int cxi = CX[q];
                 constexpr int cyi = CY[q];
                 constexpr int czi = CZ[q];
@@ -95,9 +96,9 @@ __global__ void streamCollide(
                 const real_t hxz = cx * cz;
                 const real_t hyz = cy * cz;
                 const real_t cu = cx * ux_s + cy * uy_s + cz * uz_s;
-                const real_t mh = mxx_s * hxx + myy_s * hyy + mzz_s * hzz + static_cast<real_t>(2) * mxy_s * hxy + static_cast<real_t>(2) * mxz_s * hxz + static_cast<real_t>(2) * myz_s * hyz;
+                const real_t mh = mxx_s * hxx + myy_s * hyy + mzz_s * hzz + mxy_s * hxy + mxz_s * hxz + myz_s * hyz;
 
-                const real_t fq = w * rho_s * (static_cast<real_t>(1) + AS2 * cu + static_cast<real_t>(0.5) * AS4 * mh);
+                const real_t fq = w * rho_s * (static_cast<real_t>(1) + cu + mh);
 
                 rho += fq;
                 jx += fq * cx;
@@ -124,30 +125,34 @@ __global__ void streamCollide(
         myz = hyzSum * invRho;
     }
 
-    const real_t mxxEq = ux * ux;
-    const real_t myyEq = uy * uy;
-    const real_t mzzEq = uz * uz;
-    const real_t mxyEq = ux * uy;
-    const real_t mxzEq = ux * uz;
-    const real_t myzEq = uy * uz;
+    // scale
+    ux = SCALE_I * ux;
+    uy = SCALE_I * uy;
+    uz = SCALE_I * uz;
+    mxx = SCALE_II * mxx;
+    myy = SCALE_II * myy;
+    mzz = SCALE_II * mzz;
+    mxy = SCALE_IJ * mxy;
+    mxz = SCALE_IJ * mxz;
+    myz = SCALE_IJ * myz;
 
     // collide
-    mxx = mxx - OMEGA * (mxx - mxxEq);
-    myy = myy - OMEGA * (myy - myyEq);
-    mzz = mzz - OMEGA * (mzz - mzzEq);
-    mxy = mxy - OMEGA * (mxy - mxyEq);
-    mxz = mxz - OMEGA * (mxz - mxzEq);
-    myz = myz - OMEGA * (myz - myzEq);
+    mxx = T_OMEGA * mxx + OMEGA_D2 * ux * ux;
+    myy = T_OMEGA * myy + OMEGA_D2 * uy * uy;
+    mzz = T_OMEGA * mzz + OMEGA_D2 * uz * uz;
+    mxy = T_OMEGA * mxy + OMEGA * ux * uy;
+    mxz = T_OMEGA * mxz + OMEGA * ux * uz;
+    myz = T_OMEGA * myz + OMEGA * uy * uz;
 
     // write to global memory
-    moments[idx_ + CELLS * (NUM_MOMENTS + RHO)] = rho;
-    moments[idx_ + CELLS * (NUM_MOMENTS + UX)] = ux;
-    moments[idx_ + CELLS * (NUM_MOMENTS + UY)] = uy;
-    moments[idx_ + CELLS * (NUM_MOMENTS + UZ)] = uz;
-    moments[idx_ + CELLS * (NUM_MOMENTS + MXX)] = mxx;
-    moments[idx_ + CELLS * (NUM_MOMENTS + MYY)] = myy;
-    moments[idx_ + CELLS * (NUM_MOMENTS + MZZ)] = mzz;
-    moments[idx_ + CELLS * (NUM_MOMENTS + MXY)] = mxy;
-    moments[idx_ + CELLS * (NUM_MOMENTS + MXZ)] = mxz;
-    moments[idx_ + CELLS * (NUM_MOMENTS + MYZ)] = myz;
+    dbuffer[idx_ + CELLS * RHO] = rho;
+    dbuffer[idx_ + CELLS * UX] = ux;
+    dbuffer[idx_ + CELLS * UY] = uy;
+    dbuffer[idx_ + CELLS * UZ] = uz;
+    dbuffer[idx_ + CELLS * MXX] = mxx;
+    dbuffer[idx_ + CELLS * MYY] = myy;
+    dbuffer[idx_ + CELLS * MZZ] = mzz;
+    dbuffer[idx_ + CELLS * MXY] = mxy;
+    dbuffer[idx_ + CELLS * MXZ] = mxz;
+    dbuffer[idx_ + CELLS * MYZ] = myz;
 }
