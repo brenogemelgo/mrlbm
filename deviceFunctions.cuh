@@ -2,27 +2,14 @@
 
 #include "constants.cuh"
 
-__device__ [[nodiscard]] static inline natural_t idx(
-    const natural_t tx,
-    const natural_t ty,
-    const natural_t tz,
-    const natural_t bx,
-    const natural_t by,
-    const natural_t bz) noexcept
-{
-    return tx + BLOCK_NX * (ty + BLOCK_NY * (tz + BLOCK_NZ * (bx + NUM_BLOCK_X * (by + NUM_BLOCK_Y * bz))));
-}
+#include <utility>
 
-__device__ [[nodiscard]] static inline natural_t midx(
-    const natural_t field,
-    const natural_t tx,
-    const natural_t ty,
-    const natural_t tz,
-    const natural_t bx,
-    const natural_t by,
-    const natural_t bz) noexcept
+__device__ __host__ [[nodiscard]] static inline natural_t global3(
+    const natural_t x,
+    const natural_t y,
+    const natural_t z) noexcept
 {
-    return idx(tx, ty, tz, bx, by, bz) + CELLS * field;
+    return x + y * NX + z * STRIDE;
 }
 
 __device__ __host__ [[nodiscard]] static inline natural_t momentIdx(
@@ -34,14 +21,6 @@ __device__ __host__ [[nodiscard]] static inline natural_t momentIdx(
 
 __device__ __host__ [[nodiscard]] static inline real_t &moment(
     real_t *moments,
-    const natural_t field,
-    const natural_t id) noexcept
-{
-    return moments[momentIdx(field, id)];
-}
-
-__device__ __host__ [[nodiscard]] static inline const real_t &moment(
-    const real_t *moments,
     const natural_t field,
     const natural_t id) noexcept
 {
@@ -77,4 +56,12 @@ __device__ inline constexpr void constexpr_for(F &&f) noexcept
             constexpr_for<Start + 1, End>(std::forward<F>(f));
         }
     }
+}
+
+__device__ __host__ [[nodiscard]] static inline const real_t &moment(
+    const real_t *moments,
+    const natural_t field,
+    const natural_t id) noexcept
+{
+    return moments[momentIdx(field, id)];
 }

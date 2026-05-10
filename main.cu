@@ -7,7 +7,7 @@
 #include <iostream>
 #include <utility>
 
-// #define BENCHMARK
+#define BENCHMARK
 
 #define CUDA_CHECK(call)                                                         \
     do                                                                           \
@@ -33,15 +33,17 @@ int main()
     real_t *dbufferAlloc = dbuffer;
 
     constexpr dim3 block(BLOCK_NX, BLOCK_NY, BLOCK_NZ);
-    constexpr dim3 grid(NUM_BLOCK_X, NUM_BLOCK_Y, NUM_BLOCK_Z);
+    constexpr dim3 grid(GRID_X, GRID_Y, GRID_Z);
 
     cavityInit<<<grid, block>>>(moments, dbuffer);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
     const auto start = std::chrono::high_resolution_clock::now();
+#ifndef BENCHMARK
     auto lastStamp = start;
     natural_t lastStampStep = 0;
+#endif
 
     for (natural_t t = 0; t < NSTEPS; ++t)
     {

@@ -23,29 +23,6 @@ static inline void outputCheckCuda(
     }
 }
 
-static inline natural_t outputIdx(
-    const natural_t x,
-    const natural_t y,
-    const natural_t z)
-{
-    const natural_t tx = x % BLOCK_NX;
-    const natural_t ty = y % BLOCK_NY;
-    const natural_t tz = z % BLOCK_NZ;
-    const natural_t bx = x / BLOCK_NX;
-    const natural_t by = y / BLOCK_NY;
-    const natural_t bz = z / BLOCK_NZ;
-
-    return tx + BLOCK_NX * (ty + BLOCK_NY * (tz + BLOCK_NZ * (bx + NUM_BLOCK_X * (by + NUM_BLOCK_Y * bz))));
-}
-
-static inline natural_t outputCartesianIdx(
-    const natural_t x,
-    const natural_t y,
-    const natural_t z)
-{
-    return x + NX * (y + NY * z);
-}
-
 static inline const char *outputMomentName(const natural_t field)
 {
     switch (field)
@@ -103,27 +80,15 @@ static inline void writeBinary(
         std::exit(EXIT_FAILURE);
     }
 
-    std::vector<real_t> blocked(CELLS);
-    std::vector<real_t> cartesian(CELLS);
+    std::vector<real_t> fieldData(CELLS);
 
     for (natural_t field = 0; field < NUM_MOMENTS; ++field)
     {
         outputCheckCuda(
-            cudaMemcpy(blocked.data(), deviceMoments + CELLS * field, CELLS * sizeof(real_t), cudaMemcpyDeviceToHost),
+            cudaMemcpy(fieldData.data(), deviceMoments + CELLS * field, CELLS * sizeof(real_t), cudaMemcpyDeviceToHost),
             "cudaMemcpy binary field");
 
-        for (natural_t z = 0; z < NZ; ++z)
-        {
-            for (natural_t y = 0; y < NY; ++y)
-            {
-                for (natural_t x = 0; x < NX; ++x)
-                {
-                    cartesian[outputCartesianIdx(x, y, z)] = blocked[outputIdx(x, y, z)];
-                }
-            }
-        }
-
-        out.write(reinterpret_cast<const char *>(cartesian.data()), static_cast<std::streamsize>(CELLS * sizeof(real_t)));
+        out.write(reinterpret_cast<const char *>(fieldData.data()), static_cast<std::streamsize>(CELLS * sizeof(real_t)));
         if (!out)
         {
             std::cerr << "Could not write binary output: " << path << std::endl;

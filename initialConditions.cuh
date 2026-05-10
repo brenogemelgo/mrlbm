@@ -15,7 +15,7 @@ __global__ void cavityInit(
         return;
     }
 
-    const natural_t id = idx(threadIdx.x, threadIdx.y, threadIdx.z, blockIdx.x, blockIdx.y, blockIdx.z);
+    const natural_t id = global3(x, y, z);
 
     moment(moments, RHO, id) = static_cast<real_t>(1);
     moment(moments, UX, id) = static_cast<real_t>(0);

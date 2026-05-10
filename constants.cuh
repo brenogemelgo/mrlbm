@@ -3,7 +3,6 @@
 // =================================================================================================== //
 
 #include <cstdint>
-#include <utility>
 #include <cuda_fp16.h> // __half precision
 
 // =================================================================================================== //
@@ -40,7 +39,6 @@ constexpr real_t CS2 = static_cast<real_t>(static_cast<double>(1) / static_cast<
 constexpr real_t SCALE_I = static_cast<real_t>(3.0);
 constexpr real_t SCALE_II = static_cast<real_t>(4.5);
 constexpr real_t SCALE_IJ = static_cast<real_t>(9.0);
-constexpr real_t EPS = static_cast<real_t>(1.0e-7);
 
 // =================================================================================================== //
 
@@ -49,8 +47,6 @@ constexpr real_t TAU = static_cast<real_t>(0.5) + static_cast<real_t>(3.0) * VIS
 constexpr real_t OMEGA = static_cast<real_t>(static_cast<double>(1) / static_cast<double>(TAU));
 constexpr real_t T_OMEGA = static_cast<real_t>(1.0) - OMEGA;
 constexpr real_t OMEGA_D2 = static_cast<real_t>(0.5) * OMEGA;
-constexpr real_t T_OMEGA_SCALE_II = T_OMEGA * SCALE_II;
-constexpr real_t T_OMEGA_SCALE_IJ = T_OMEGA * SCALE_IJ;
 
 // =================================================================================================== //
 
@@ -58,15 +54,16 @@ constexpr natural_t NX = L_CHAR;
 constexpr natural_t NY = L_CHAR;
 constexpr natural_t NZ = L_CHAR;
 constexpr natural_t CELLS = NX * NY * NZ;
+constexpr natural_t STRIDE = NX * NY;
 
 // =================================================================================================== //
 
-constexpr natural_t BLOCK_NX = 8;
-constexpr natural_t BLOCK_NY = 8;
-constexpr natural_t BLOCK_NZ = 8;
-constexpr natural_t NUM_BLOCK_X = (NX + BLOCK_NX - 1) / BLOCK_NX;
-constexpr natural_t NUM_BLOCK_Y = (NY + BLOCK_NY - 1) / BLOCK_NY;
-constexpr natural_t NUM_BLOCK_Z = (NZ + BLOCK_NZ - 1) / BLOCK_NZ;
+constexpr natural_t BLOCK_NX = 32;
+constexpr natural_t BLOCK_NY = 4;
+constexpr natural_t BLOCK_NZ = 4;
+constexpr natural_t GRID_X = (NX + BLOCK_NX - 1) / BLOCK_NX;
+constexpr natural_t GRID_Y = (NY + BLOCK_NY - 1) / BLOCK_NY;
+constexpr natural_t GRID_Z = (NZ + BLOCK_NZ - 1) / BLOCK_NZ;
 
 // =================================================================================================== //
 

@@ -7,75 +7,39 @@ __global__ void streamCollide(
     const real_t *__restrict__ moments,
     real_t *__restrict__ dbuffer)
 {
-    const natural_t tx = threadIdx.x;
-    const natural_t ty = threadIdx.y;
-    const natural_t tz = threadIdx.z;
-    const natural_t bx = blockIdx.x;
-    const natural_t by = blockIdx.y;
-    const natural_t bz = blockIdx.z;
-    const natural_t x = bx * BLOCK_NX + tx;
-    const natural_t y = by * BLOCK_NY + ty;
-    const natural_t z = bz * BLOCK_NZ + tz;
+    const natural_t x = blockIdx.x * BLOCK_NX + threadIdx.x;
+    const natural_t y = blockIdx.y * BLOCK_NY + threadIdx.y;
+    const natural_t z = blockIdx.z * BLOCK_NZ + threadIdx.z;
+
     if (x >= NX || y >= NY || z >= NZ)
     {
         return;
     }
-    const natural_t idx_ = idx(tx, ty, tz, bx, by, bz);
 
-    // load moments
-    real_t rho = moments[idx_ + CELLS * RHO];
-    real_t ux = moments[idx_ + CELLS * UX];
-    real_t uy = moments[idx_ + CELLS * UY];
-    real_t uz = moments[idx_ + CELLS * UZ];
-    real_t mxx = moments[idx_ + CELLS * MXX];
-    real_t myy = moments[idx_ + CELLS * MYY];
-    real_t mzz = moments[idx_ + CELLS * MZZ];
-    real_t mxy = moments[idx_ + CELLS * MXY];
-    real_t mxz = moments[idx_ + CELLS * MXZ];
-    real_t myz = moments[idx_ + CELLS * MYZ];
-
-    // check if boundary or interior
+    const natural_t idx_ = global3(x, y, z);
     const unsigned int nodeType = boundaryMask(x, y, z);
-    if (nodeType != BULK)
-    {
-        // calculate moments at boundary
-#include "cavityBC.cuh"
-    }
-    else
-    {
-        rho = static_cast<real_t>(0);
-        ux = static_cast<real_t>(0);
-        uy = static_cast<real_t>(0);
-        uz = static_cast<real_t>(0);
-        mxx = static_cast<real_t>(0);
-        myy = static_cast<real_t>(0);
-        mzz = static_cast<real_t>(0);
-        mxy = static_cast<real_t>(0);
-        mxz = static_cast<real_t>(0);
-        myz = static_cast<real_t>(0);
 
-        // calculate moments at interior
-        constexpr_for<static_cast<natural_t>(0), static_cast<natural_t>(Q)>(
-            [&](const auto q) noexcept
+    real_t pop[27];
+
+    constexpr_for<static_cast<natural_t>(0), static_cast<natural_t>(Q)>(
+        [&](const auto qConst) noexcept
+        {
+            constexpr natural_t q = qConst();
+            constexpr int cxi = CX[q];
+            constexpr int cyi = CY[q];
+            constexpr int czi = CZ[q];
+            constexpr real_t cx = static_cast<real_t>(cxi);
+            constexpr real_t cy = static_cast<real_t>(cyi);
+            constexpr real_t cz = static_cast<real_t>(czi);
+            constexpr real_t w = W[q];
+
+            const int xs_i = static_cast<int>(x) - cxi;
+            const int ys_i = static_cast<int>(y) - cyi;
+            const int zs_i = static_cast<int>(z) - czi;
+
+            if (xs_i >= 0 && xs_i < static_cast<int>(NX) && ys_i >= 0 && ys_i < static_cast<int>(NY) && zs_i >= 0 && zs_i < static_cast<int>(NZ))
             {
-                constexpr int cxi = CX[q];
-                constexpr int cyi = CY[q];
-                constexpr int czi = CZ[q];
-                constexpr real_t cx = static_cast<real_t>(cxi);
-                constexpr real_t cy = static_cast<real_t>(cyi);
-                constexpr real_t cz = static_cast<real_t>(czi);
-                constexpr real_t w = W[q];
-
-                const natural_t xs = static_cast<natural_t>(static_cast<int>(x) - cxi);
-                const natural_t ys = static_cast<natural_t>(static_cast<int>(y) - cyi);
-                const natural_t zs = static_cast<natural_t>(static_cast<int>(z) - czi);
-                const natural_t txs = xs % BLOCK_NX;
-                const natural_t tys = ys % BLOCK_NY;
-                const natural_t tzs = zs % BLOCK_NZ;
-                const natural_t bxs = xs / BLOCK_NX;
-                const natural_t bys = ys / BLOCK_NY;
-                const natural_t bzs = zs / BLOCK_NZ;
-                const natural_t src = idx(txs, tys, tzs, bxs, bys, bzs);
+                const natural_t src = global3(static_cast<natural_t>(xs_i), static_cast<natural_t>(ys_i), static_cast<natural_t>(zs_i));
 
                 const real_t rho_s = moments[src + CELLS * RHO];
                 const real_t ux_s = moments[src + CELLS * UX];
@@ -94,37 +58,51 @@ __global__ void streamCollide(
                 const real_t hxy = cx * cy;
                 const real_t hxz = cx * cz;
                 const real_t hyz = cy * cz;
+
                 const real_t cu = cx * ux_s + cy * uy_s + cz * uz_s;
+
                 const real_t mh = mxx_s * hxx + myy_s * hyy + mzz_s * hzz + mxy_s * hxy + mxz_s * hxz + myz_s * hyz;
 
-                const real_t f_hat = w * rho_s * (static_cast<real_t>(1) + cu + mh);
+                pop[q] = w * rho_s * (static_cast<real_t>(1.0) + cu + mh);
+            }
+            else
+            {
+                pop[q] = static_cast<real_t>(0.0);
+            }
+        });
 
-                rho += f_hat;
-                ux += f_hat * cx;
-                uy += f_hat * cy;
-                uz += f_hat * cz;
-                mxx += f_hat * hxx;
-                myy += f_hat * hyy;
-                mzz += f_hat * hzz;
-                mxy += f_hat * hxy;
-                mxz += f_hat * hxz;
-                myz += f_hat * hyz;
-            });
+    real_t rho = static_cast<real_t>(0);
+    real_t ux = static_cast<real_t>(0);
+    real_t uy = static_cast<real_t>(0);
+    real_t uz = static_cast<real_t>(0);
+    real_t mxx = static_cast<real_t>(0);
+    real_t myy = static_cast<real_t>(0);
+    real_t mzz = static_cast<real_t>(0);
+    real_t mxy = static_cast<real_t>(0);
+    real_t mxz = static_cast<real_t>(0);
+    real_t myz = static_cast<real_t>(0);
 
+    if (nodeType != BULK)
+    {
+#include "cavityBC.cuh"
+    }
+    else
+    {
+        rho = pop[0] + pop[1] + pop[2] + pop[3] + pop[4] + pop[5] + pop[6] + pop[7] + pop[8] + pop[9] + pop[10] + pop[11] + pop[12] + pop[13] + pop[14] + pop[15] + pop[16] + pop[17] + pop[18] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26];
         const real_t invRho = static_cast<real_t>(1) / rho;
 
-        ux *= invRho;
-        uy *= invRho;
-        uz *= invRho;
-        mxx *= invRho;
-        myy *= invRho;
-        mzz *= invRho;
-        mxy *= invRho;
-        mxz *= invRho;
-        myz *= invRho;
+        ux = (pop[1] - pop[2] + pop[7] - pop[8] + pop[9] - pop[10] + pop[13] - pop[14] + pop[15] - pop[16] + pop[19] - pop[20] + pop[21] - pop[22] + pop[23] - pop[24] - pop[25] + pop[26]) * invRho;
+        uy = (pop[3] - pop[4] + pop[7] - pop[8] + pop[11] - pop[12] - pop[13] + pop[14] + pop[17] - pop[18] + pop[19] - pop[20] + pop[21] - pop[22] - pop[23] + pop[24] + pop[25] - pop[26]) * invRho;
+        uz = (pop[5] - pop[6] + pop[9] - pop[10] + pop[11] - pop[12] - pop[15] + pop[16] - pop[17] + pop[18] + pop[19] - pop[20] - pop[21] + pop[22] + pop[23] - pop[24] + pop[25] - pop[26]) * invRho;
+
+        mxx = (pop[1] + pop[2] + pop[7] + pop[8] + pop[9] + pop[10] + pop[13] + pop[14] + pop[15] + pop[16] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - CS2;
+        myy = (pop[3] + pop[4] + pop[7] + pop[8] + pop[11] + pop[12] + pop[13] + pop[14] + pop[17] + pop[18] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - CS2;
+        mzz = (pop[5] + pop[6] + pop[9] + pop[10] + pop[11] + pop[12] + pop[15] + pop[16] + pop[17] + pop[18] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - CS2;
+        mxy = (pop[7] + pop[8] + pop[19] + pop[20] + pop[21] + pop[22] - pop[13] - pop[14] - pop[23] - pop[24] - pop[25] - pop[26]) * invRho;
+        mxz = (pop[9] + pop[10] + pop[19] + pop[20] + pop[23] + pop[24] - pop[15] - pop[16] - pop[21] - pop[22] - pop[25] - pop[26]) * invRho;
+        myz = (pop[11] + pop[12] + pop[19] + pop[20] + pop[25] + pop[26] - pop[17] - pop[18] - pop[21] - pop[22] - pop[23] - pop[24]) * invRho;
     }
 
-    // scale
     ux = SCALE_I * ux;
     uy = SCALE_I * uy;
     uz = SCALE_I * uz;
@@ -135,7 +113,6 @@ __global__ void streamCollide(
     mxz = SCALE_IJ * mxz;
     myz = SCALE_IJ * myz;
 
-    // collide
     mxx = T_OMEGA * mxx + OMEGA_D2 * ux * ux;
     myy = T_OMEGA * myy + OMEGA_D2 * uy * uy;
     mzz = T_OMEGA * mzz + OMEGA_D2 * uz * uz;
@@ -143,7 +120,6 @@ __global__ void streamCollide(
     mxz = T_OMEGA * mxz + OMEGA * ux * uz;
     myz = T_OMEGA * myz + OMEGA * uy * uz;
 
-    // write to global memory
     dbuffer[idx_ + CELLS * RHO] = rho;
     dbuffer[idx_ + CELLS * UX] = ux;
     dbuffer[idx_ + CELLS * UY] = uy;
@@ -155,3 +131,5 @@ __global__ void streamCollide(
     dbuffer[idx_ + CELLS * MXZ] = mxz;
     dbuffer[idx_ + CELLS * MYZ] = myz;
 }
+
+#undef STREAM_POP
