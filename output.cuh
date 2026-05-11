@@ -97,6 +97,132 @@ static inline void writeBinary(
     }
 }
 
+static inline bool parseOutputBinaryStep(
+    const std::filesystem::path &path,
+    natural_t &step)
+{
+    if (path.extension() != ".bin")
+    {
+        return false;
+    }
+
+    const std::string stem = path.stem().string();
+    constexpr const char *prefix = "step_";
+    constexpr std::size_t prefixSize = 5;
+
+    if (stem.size() <= prefixSize || stem.compare(0, prefixSize, prefix) != 0)
+    {
+        return false;
+    }
+
+    natural_t value = 0;
+    for (std::size_t i = prefixSize; i < stem.size(); ++i)
+    {
+        const char c = stem[i];
+        if (c < '0' || c > '9')
+        {
+            return false;
+        }
+        value = value * static_cast<natural_t>(10) + static_cast<natural_t>(c - '0');
+    }
+
+    step = value;
+    return true;
+}
+
+static inline bool findLatestOutputBinary(
+    std::filesystem::path &binaryPath,
+    natural_t &step)
+{
+    const std::filesystem::path dir("output");
+    if (!std::filesystem::exists(dir))
+    {
+        return false;
+    }
+
+    bool found = false;
+    natural_t latestStep = 0;
+    std::filesystem::path latestPath;
+
+    for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(dir))
+    {
+        if (!entry.is_regular_file())
+        {
+            continue;
+        }
+
+        natural_t candidateStep = 0;
+        if (!parseOutputBinaryStep(entry.path(), candidateStep))
+        {
+            continue;
+        }
+
+        if (!found || candidateStep > latestStep)
+        {
+            found = true;
+            latestStep = candidateStep;
+            latestPath = entry.path();
+        }
+    }
+
+    if (found)
+    {
+        step = latestStep;
+        binaryPath = latestPath;
+    }
+
+    return found;
+}
+
+static inline void readBinary(
+    real_t *deviceMoments,
+    const std::filesystem::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+    {
+        std::cerr << "Could not open checkpoint input: " << path << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::vector<real_t> fieldData(CELLS);
+
+    for (natural_t field = 0; field < NUM_MOMENTS; ++field)
+    {
+        in.read(reinterpret_cast<char *>(fieldData.data()), static_cast<std::streamsize>(CELLS * sizeof(real_t)));
+        if (!in)
+        {
+            std::cerr << "Could not read checkpoint field " << outputMomentName(field) << ": " << path << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        outputCheckCuda(
+            cudaMemcpy(deviceMoments + CELLS * field, fieldData.data(), CELLS * sizeof(real_t), cudaMemcpyHostToDevice),
+            "cudaMemcpy checkpoint field");
+    }
+}
+
+static inline natural_t loadLatestCheckpoint(
+    real_t *moments,
+    real_t *dbuffer)
+{
+    std::filesystem::path binaryPath;
+    natural_t step = 0;
+    if (!findLatestOutputBinary(binaryPath, step))
+    {
+        std::cerr << "No checkpoint found in output/" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    readBinary(moments, binaryPath);
+    outputCheckCuda(
+        cudaMemcpy(dbuffer, moments, static_cast<size_t>(NUM_MOMENTS) * static_cast<size_t>(CELLS) * sizeof(real_t), cudaMemcpyDeviceToDevice),
+        "cudaMemcpy checkpoint buffer");
+
+    std::cout << "loaded checkpoint " << binaryPath << " at step " << step << std::endl;
+    return step;
+}
+
 static inline void writeVti(
     const std::filesystem::path &binaryPath,
     const std::filesystem::path &vtiPath)

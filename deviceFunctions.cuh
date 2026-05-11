@@ -4,7 +4,7 @@
 
 #include <utility>
 
-__device__ __host__ [[nodiscard]] static inline natural_t global3(
+__device__ __host__ [[nodiscard]] static __forceinline__ natural_t global3(
     const natural_t x,
     const natural_t y,
     const natural_t z) noexcept
@@ -12,14 +12,14 @@ __device__ __host__ [[nodiscard]] static inline natural_t global3(
     return x + y * NX + z * STRIDE;
 }
 
-__device__ __host__ [[nodiscard]] static inline natural_t momentIdx(
+__device__ __host__ [[nodiscard]] static __forceinline__ natural_t momentIdx(
     const natural_t field,
     const natural_t id) noexcept
 {
     return id + CELLS * field;
 }
 
-__device__ __host__ [[nodiscard]] static inline real_t &moment(
+__device__ __host__ [[nodiscard]] static __forceinline__ real_t &moment(
     real_t *moments,
     const natural_t field,
     const natural_t id) noexcept
@@ -46,7 +46,7 @@ struct IntegralConstant
 };
 
 template <const natural_t Start, const natural_t End, typename F>
-__device__ inline constexpr void constexpr_for(F &&f) noexcept
+__device__ __forceinline__ constexpr void constexpr_for(F &&f) noexcept
 {
     if constexpr (Start < End)
     {
@@ -58,7 +58,7 @@ __device__ inline constexpr void constexpr_for(F &&f) noexcept
     }
 }
 
-__device__ __host__ [[nodiscard]] static inline const real_t &moment(
+__device__ __host__ [[nodiscard]] static __forceinline__ const real_t &moment(
     const real_t *moments,
     const natural_t field,
     const natural_t id) noexcept

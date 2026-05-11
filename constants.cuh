@@ -12,10 +12,10 @@ using real_t = float;
 
 // =================================================================================================== //
 
-constexpr natural_t L_CHAR = 64;
+constexpr natural_t L_CHAR = 256;
 constexpr real_t CHAR_VELOCITY = static_cast<real_t>(0.05);
 constexpr real_t U_CHAR = CHAR_VELOCITY;
-constexpr real_t REYNOLDS = static_cast<real_t>(3000);
+constexpr real_t REYNOLDS = static_cast<real_t>(20000);
 constexpr natural_t NSTEPS = 100000;
 constexpr natural_t STAMP = 1000;
 

@@ -4,10 +4,11 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <utility>
 
-#define BENCHMARK
+// #define BENCHMARK
 
 #define CUDA_CHECK(call)                                                         \
     do                                                                           \
@@ -20,8 +21,17 @@
         }                                                                        \
     } while (false)
 
-int main()
+int main(int argc, char **argv)
 {
+    bool continueFromCheckpoint = false;
+    for (int arg = 1; arg < argc; ++arg)
+    {
+        if (std::strcmp(argv[arg], "--continue") == 0 || std::strcmp(argv[arg], "continue") == 0)
+        {
+            continueFromCheckpoint = true;
+        }
+    }
+
     real_t *moments = nullptr;
     real_t *dbuffer = nullptr;
     constexpr size_t bytes = static_cast<size_t>(NUM_MOMENTS) * static_cast<size_t>(CELLS) * sizeof(real_t);
@@ -35,17 +45,36 @@ int main()
     constexpr dim3 block(BLOCK_NX, BLOCK_NY, BLOCK_NZ);
     constexpr dim3 grid(GRID_X, GRID_Y, GRID_Z);
 
-    cavityInit<<<grid, block>>>(moments, dbuffer);
-    CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(initIRBCBoundaryTables());
 
+    natural_t startStep = 0;
+    if (continueFromCheckpoint)
+    {
+        startStep = loadLatestCheckpoint(moments, dbuffer);
+    }
+    else
+    {
+        cavityInit<<<grid, block>>>(moments, dbuffer);
+        CUDA_CHECK(cudaGetLastError());
+        CUDA_CHECK(cudaDeviceSynchronize());
+    }
+
+    std::cout << std::endl;
+    if (continueFromCheckpoint)
+    {
+        std::cout << "simulation continue from step " << startStep << std::endl;
+    }
+    else
+    {
+        std::cout << "simulation start" << std::endl;
+    }
     const auto start = std::chrono::high_resolution_clock::now();
 #ifndef BENCHMARK
     auto lastStamp = start;
-    natural_t lastStampStep = 0;
+    natural_t lastStampStep = startStep;
 #endif
 
-    for (natural_t t = 0; t < NSTEPS; ++t)
+    for (natural_t t = startStep; t < NSTEPS; ++t)
     {
         streamCollide<<<grid, block>>>(moments, dbuffer);
         std::swap(moments, dbuffer);
@@ -77,7 +106,8 @@ int main()
 
     const auto end = std::chrono::high_resolution_clock::now();
     const std::chrono::duration<double> elapsed = end - start;
-    const double mlups = static_cast<double>(CELLS) * static_cast<double>(NSTEPS) / elapsed.count() / static_cast<double>(1000000);
+    const natural_t completedSteps = NSTEPS > startStep ? NSTEPS - startStep : 0;
+    const double mlups = static_cast<double>(CELLS) * static_cast<double>(completedSteps) / elapsed.count() / static_cast<double>(1000000);
 
     std::cout << std::endl;
     std::cout << "elapsed: " << elapsed.count() << " s" << std::endl;
