@@ -2,8 +2,24 @@
 
 // =================================================================================================== //
 
+#include <cuda_runtime.h>
 #include <cstdint>
-#include <cuda_fp16.h> // __half precision
+#include <cstddef>
+#include <cuda_fp16.h>
+#include <chrono>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <utility>
+#include <fstream>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
+#include <cmath>
+#include <type_traits>
+#include <vector>
+#include <stdexcept>
+#include <string>
 
 // =================================================================================================== //
 
@@ -12,12 +28,12 @@ using real_t = float;
 
 // =================================================================================================== //
 
-constexpr natural_t L_CHAR = 256;
-constexpr real_t CHAR_VELOCITY = static_cast<real_t>(0.05);
+constexpr natural_t L_CHAR = 128;
+constexpr real_t CHAR_VELOCITY = static_cast<real_t>(0.0256);
 constexpr real_t U_CHAR = CHAR_VELOCITY;
-constexpr real_t REYNOLDS = static_cast<real_t>(20000);
-constexpr natural_t NSTEPS = 100000;
-constexpr natural_t STAMP = 1000;
+constexpr real_t REYNOLDS = static_cast<real_t>(10000);
+constexpr natural_t NSTEPS = 1000000;
+constexpr natural_t STAMP = 20000;
 
 // =================================================================================================== //
 

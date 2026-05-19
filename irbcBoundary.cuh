@@ -1,124 +1,13 @@
 #pragma once
 
 #include "bitmasks.cuh"
-#include "constants.cuh"
 #include "deviceFunctions.cuh"
-
-#include <cuda_runtime.h>
 
 constexpr natural_t IRBC_UNKNOWNS = 7;
 constexpr natural_t IRBC_TABLE_STRIDE = IRBC_UNKNOWNS * IRBC_UNKNOWNS;
 constexpr natural_t IRBC_TABLE_SIZE = 64 * IRBC_TABLE_STRIDE;
 
 __device__ __constant__ real_t IRBC_INVERSE[IRBC_TABLE_SIZE];
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr int cxValue() noexcept
-{
-    if constexpr (q == 1 || q == 7 || q == 9 || q == 13 || q == 15 || q == 19 || q == 21 || q == 23 || q == 26)
-    {
-        return 1;
-    }
-    else if constexpr (q == 2 || q == 8 || q == 10 || q == 14 || q == 16 || q == 20 || q == 22 || q == 24 || q == 25)
-    {
-        return -1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr int cyValue() noexcept
-{
-    if constexpr (q == 3 || q == 7 || q == 11 || q == 14 || q == 17 || q == 19 || q == 21 || q == 24 || q == 25)
-    {
-        return 1;
-    }
-    else if constexpr (q == 4 || q == 8 || q == 12 || q == 13 || q == 18 || q == 20 || q == 22 || q == 23 || q == 26)
-    {
-        return -1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr int czValue() noexcept
-{
-    if constexpr (q == 5 || q == 9 || q == 11 || q == 16 || q == 18 || q == 19 || q == 22 || q == 23 || q == 25)
-    {
-        return 1;
-    }
-    else if constexpr (q == 6 || q == 10 || q == 12 || q == 15 || q == 17 || q == 20 || q == 21 || q == 24 || q == 26)
-    {
-        return -1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr real_t wValue() noexcept
-{
-    if constexpr (q == 0)
-    {
-        return W1;
-    }
-    else if constexpr (q <= 6)
-    {
-        return W2;
-    }
-    else if constexpr (q <= 18)
-    {
-        return W3;
-    }
-    else
-    {
-        return W4;
-    }
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr real_t hxxValue() noexcept
-{
-    return static_cast<real_t>(cxValue<q>() * cxValue<q>()) - CS2;
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr real_t hyyValue() noexcept
-{
-    return static_cast<real_t>(cyValue<q>() * cyValue<q>()) - CS2;
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr real_t hzzValue() noexcept
-{
-    return static_cast<real_t>(czValue<q>() * czValue<q>()) - CS2;
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr real_t hxyValue() noexcept
-{
-    return static_cast<real_t>(cxValue<q>() * cyValue<q>());
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr real_t hxzValue() noexcept
-{
-    return static_cast<real_t>(cxValue<q>() * czValue<q>());
-}
-
-template <natural_t q>
-__device__ [[nodiscard]] static __forceinline__ constexpr real_t hyzValue() noexcept
-{
-    return static_cast<real_t>(cyValue<q>() * czValue<q>());
-}
 
 template <natural_t q>
 __device__ static __forceinline__ void hermiteBasis(real_t (&h)[6]) noexcept

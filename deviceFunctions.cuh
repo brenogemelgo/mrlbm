@@ -1,10 +1,8 @@
 #pragma once
 
-#include "constants.cuh"
+#include "D3Q27.cuh"
 
-#include <utility>
-
-__device__ __host__ [[nodiscard]] static __forceinline__ natural_t global3(
+__device__ [[nodiscard]] static __forceinline__ natural_t global3(
     const natural_t x,
     const natural_t y,
     const natural_t z) noexcept
@@ -12,19 +10,17 @@ __device__ __host__ [[nodiscard]] static __forceinline__ natural_t global3(
     return x + y * NX + z * STRIDE;
 }
 
-__device__ __host__ [[nodiscard]] static __forceinline__ natural_t momentIdx(
-    const natural_t field,
-    const natural_t id) noexcept
+__device__ __host__ [[nodiscard]] static __forceinline__ natural_t midx(
+    const natural_t idx,
+    const natural_t moment) noexcept
 {
-    return id + CELLS * field;
+    return idx + CELLS * moment;
 }
 
-__device__ __host__ [[nodiscard]] static __forceinline__ real_t &moment(
-    real_t *moments,
-    const natural_t field,
-    const natural_t id) noexcept
+template <int c, natural_t N>
+__device__ [[nodiscard]] static inline natural_t periodicPull(const natural_t a) noexcept
 {
-    return moments[momentIdx(field, id)];
+    return (a - static_cast<natural_t>(c)) & (N - 1);
 }
 
 template <typename T, T v>
@@ -56,12 +52,4 @@ __device__ __forceinline__ constexpr void constexpr_for(F &&f) noexcept
             constexpr_for<Start + 1, End>(std::forward<F>(f));
         }
     }
-}
-
-__device__ __host__ [[nodiscard]] static __forceinline__ const real_t &moment(
-    const real_t *moments,
-    const natural_t field,
-    const natural_t id) noexcept
-{
-    return moments[momentIdx(field, id)];
 }

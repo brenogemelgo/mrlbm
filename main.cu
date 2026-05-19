@@ -2,12 +2,6 @@
 #include "kernel.cuh"
 #include "output.cuh"
 
-#include <chrono>
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
-#include <utility>
-
 // #define BENCHMARK
 
 #define CUDA_CHECK(call)                                                         \
@@ -95,6 +89,7 @@ int main(int argc, char **argv)
             std::cout << "MLUPS: " << stampMlups << std::endl;
 
             writeOutput(moments, t + 1);
+            writeTurbulentKineticEnergy(moments);
 
             lastStamp = std::chrono::high_resolution_clock::now();
             lastStampStep = t + 1;
