@@ -16,35 +16,55 @@ __global__ void streamCollide(
         return;
     }
 
-    const natural_t idx_ = global3(x, y, z);
-    const unsigned int nodeType = boundaryMask(x, y, z);
+    const natural_t idx = global3(x, y, z);
+    const uint8_t nodeType = boundaryMask(x, y, z);
+
+    real_t pop[VelocitySet::Q()];
 
     real_t rho;
-    real_t ux;
-    real_t uy;
-    real_t uz;
-    real_t mxx;
-    real_t myy;
-    real_t mzz;
-    real_t mxy;
-    real_t mxz;
-    real_t myz;
+    real_t ux, uy, uz;
+    real_t mxx, myy, mzz, mxy, mxz, myz;
+
+    constexpr_for<0, VelocitySet::Q()>(
+        [&](const auto Q) noexcept
+        {
+            const int xs = static_cast<int>(x) - VelocitySet::cx<Q>();
+            const int ys = static_cast<int>(y) - VelocitySet::cy<Q>();
+            const int zs = static_cast<int>(z) - VelocitySet::cz<Q>();
+
+            const bool validSrc = xs >= 0 && xs < static_cast<int>(NX) && ys >= 0 && ys < static_cast<int>(NY) && zs >= 0 && zs < static_cast<int>(NZ);
+
+            if (validSrc)
+            {
+                const natural_t src = global3(static_cast<natural_t>(xs),
+                                              static_cast<natural_t>(ys),
+                                              static_cast<natural_t>(zs));
+
+                const real_t cu = static_cast<real_t>(VelocitySet::cx<Q>()) * moments[midx(src, UX)] +
+                                  static_cast<real_t>(VelocitySet::cy<Q>()) * moments[midx(src, UY)] +
+                                  static_cast<real_t>(VelocitySet::cz<Q>()) * moments[midx(src, UZ)];
+
+                const real_t mh = moments[midx(src, MXX)] * VelocitySet::hxx<Q>() +
+                                  moments[midx(src, MYY)] * VelocitySet::hyy<Q>() +
+                                  moments[midx(src, MZZ)] * VelocitySet::hzz<Q>() +
+                                  moments[midx(src, MXY)] * VelocitySet::hxy<Q>() +
+                                  moments[midx(src, MXZ)] * VelocitySet::hxz<Q>() +
+                                  moments[midx(src, MYZ)] * VelocitySet::hyz<Q>();
+
+                pop[Q] = VelocitySet::w<Q>() * moments[midx(src, RHO)] * (static_cast<real_t>(1) + cu + mh);
+            }
+            else
+            {
+                pop[Q] = static_cast<real_t>(0);
+            }
+        });
 
     if (nodeType != BULK)
     {
-        dispatchIRBCBoundary(moments, x, y, z, nodeType, rho, ux, uy, uz, mxx, myy, mzz, mxy, mxz, myz);
+        dispatchIRBCBoundary(pop, nodeType, rho, ux, uy, uz, mxx, myy, mzz, mxy, mxz, myz);
     }
     else
     {
-        real_t pop[27];
-
-        constexpr_for<static_cast<natural_t>(0), static_cast<natural_t>(Q)>(
-            [&](const auto qConst) noexcept
-            {
-                constexpr natural_t q = qConst();
-                pop[q] = reconstructStreamedPopulation<q>(moments, x, y, z);
-            });
-
         rho = pop[0] + pop[1] + pop[2] + pop[3] + pop[4] + pop[5] + pop[6] + pop[7] + pop[8] + pop[9] + pop[10] + pop[11] + pop[12] + pop[13] + pop[14] + pop[15] + pop[16] + pop[17] + pop[18] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26];
         const real_t invRho = static_cast<real_t>(1) / rho;
 
@@ -52,23 +72,23 @@ __global__ void streamCollide(
         uy = (pop[3] - pop[4] + pop[7] - pop[8] + pop[11] - pop[12] - pop[13] + pop[14] + pop[17] - pop[18] + pop[19] - pop[20] + pop[21] - pop[22] - pop[23] + pop[24] + pop[25] - pop[26]) * invRho;
         uz = (pop[5] - pop[6] + pop[9] - pop[10] + pop[11] - pop[12] - pop[15] + pop[16] - pop[17] + pop[18] + pop[19] - pop[20] - pop[21] + pop[22] + pop[23] - pop[24] + pop[25] - pop[26]) * invRho;
 
-        mxx = (pop[1] + pop[2] + pop[7] + pop[8] + pop[9] + pop[10] + pop[13] + pop[14] + pop[15] + pop[16] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - CS2;
-        myy = (pop[3] + pop[4] + pop[7] + pop[8] + pop[11] + pop[12] + pop[13] + pop[14] + pop[17] + pop[18] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - CS2;
-        mzz = (pop[5] + pop[6] + pop[9] + pop[10] + pop[11] + pop[12] + pop[15] + pop[16] + pop[17] + pop[18] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - CS2;
+        mxx = (pop[1] + pop[2] + pop[7] + pop[8] + pop[9] + pop[10] + pop[13] + pop[14] + pop[15] + pop[16] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - VelocitySet::cs2();
+        myy = (pop[3] + pop[4] + pop[7] + pop[8] + pop[11] + pop[12] + pop[13] + pop[14] + pop[17] + pop[18] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - VelocitySet::cs2();
+        mzz = (pop[5] + pop[6] + pop[9] + pop[10] + pop[11] + pop[12] + pop[15] + pop[16] + pop[17] + pop[18] + pop[19] + pop[20] + pop[21] + pop[22] + pop[23] + pop[24] + pop[25] + pop[26]) * invRho - VelocitySet::cs2();
         mxy = (pop[7] + pop[8] + pop[19] + pop[20] + pop[21] + pop[22] - pop[13] - pop[14] - pop[23] - pop[24] - pop[25] - pop[26]) * invRho;
         mxz = (pop[9] + pop[10] + pop[19] + pop[20] + pop[23] + pop[24] - pop[15] - pop[16] - pop[21] - pop[22] - pop[25] - pop[26]) * invRho;
         myz = (pop[11] + pop[12] + pop[19] + pop[20] + pop[25] + pop[26] - pop[17] - pop[18] - pop[21] - pop[22] - pop[23] - pop[24]) * invRho;
     }
 
-    ux = SCALE_I * ux;
-    uy = SCALE_I * uy;
-    uz = SCALE_I * uz;
-    mxx = SCALE_II * mxx;
-    myy = SCALE_II * myy;
-    mzz = SCALE_II * mzz;
-    mxy = SCALE_IJ * mxy;
-    mxz = SCALE_IJ * mxz;
-    myz = SCALE_IJ * myz;
+    ux *= VelocitySet::scaleI();
+    uy *= VelocitySet::scaleI();
+    uz *= VelocitySet::scaleI();
+    mxx *= VelocitySet::scaleII();
+    myy *= VelocitySet::scaleII();
+    mzz *= VelocitySet::scaleII();
+    mxy *= VelocitySet::scaleIJ();
+    mxz *= VelocitySet::scaleIJ();
+    myz *= VelocitySet::scaleIJ();
 
     mxx = T_OMEGA * mxx + OMEGA_D2 * ux * ux;
     myy = T_OMEGA * myy + OMEGA_D2 * uy * uy;
@@ -77,14 +97,14 @@ __global__ void streamCollide(
     mxz = T_OMEGA * mxz + OMEGA * ux * uz;
     myz = T_OMEGA * myz + OMEGA * uy * uz;
 
-    dbuffer[idx_ + CELLS * RHO] = rho;
-    dbuffer[idx_ + CELLS * UX] = ux;
-    dbuffer[idx_ + CELLS * UY] = uy;
-    dbuffer[idx_ + CELLS * UZ] = uz;
-    dbuffer[idx_ + CELLS * MXX] = mxx;
-    dbuffer[idx_ + CELLS * MYY] = myy;
-    dbuffer[idx_ + CELLS * MZZ] = mzz;
-    dbuffer[idx_ + CELLS * MXY] = mxy;
-    dbuffer[idx_ + CELLS * MXZ] = mxz;
-    dbuffer[idx_ + CELLS * MYZ] = myz;
+    dbuffer[midx(idx, RHO)] = rho;
+    dbuffer[midx(idx, UX)] = ux;
+    dbuffer[midx(idx, UY)] = uy;
+    dbuffer[midx(idx, UZ)] = uz;
+    dbuffer[midx(idx, MXX)] = mxx;
+    dbuffer[midx(idx, MYY)] = myy;
+    dbuffer[midx(idx, MZZ)] = mzz;
+    dbuffer[midx(idx, MXY)] = mxy;
+    dbuffer[midx(idx, MXZ)] = mxz;
+    dbuffer[midx(idx, MYZ)] = myz;
 }

@@ -15,27 +15,21 @@ __global__ void cavityInit(
         return;
     }
 
-    const natural_t id = global3(x, y, z);
+    const natural_t idx = global3(x, y, z);
 
-    moment(moments, RHO, id) = static_cast<real_t>(1);
-    moment(moments, UX, id) = static_cast<real_t>(0);
-    moment(moments, UY, id) = static_cast<real_t>(0);
-    moment(moments, UZ, id) = static_cast<real_t>(0);
-    moment(moments, MXX, id) = static_cast<real_t>(0);
-    moment(moments, MYY, id) = static_cast<real_t>(0);
-    moment(moments, MZZ, id) = static_cast<real_t>(0);
-    moment(moments, MXY, id) = static_cast<real_t>(0);
-    moment(moments, MXZ, id) = static_cast<real_t>(0);
-    moment(moments, MYZ, id) = static_cast<real_t>(0);
+    moments[midx(idx, RHO)] = static_cast<real_t>(1);
+    moments[midx(idx, UX)] = static_cast<real_t>(0);
+    moments[midx(idx, UY)] = static_cast<real_t>(0);
+    moments[midx(idx, UZ)] = static_cast<real_t>(0);
+    moments[midx(idx, MXX)] = static_cast<real_t>(0);
+    moments[midx(idx, MYY)] = static_cast<real_t>(0);
+    moments[midx(idx, MZZ)] = static_cast<real_t>(0);
+    moments[midx(idx, MXY)] = static_cast<real_t>(0);
+    moments[midx(idx, MXZ)] = static_cast<real_t>(0);
+    moments[midx(idx, MYZ)] = static_cast<real_t>(0);
 
-    moment(dbuffer, RHO, id) = static_cast<real_t>(1);
-    moment(dbuffer, UX, id) = static_cast<real_t>(0);
-    moment(dbuffer, UY, id) = static_cast<real_t>(0);
-    moment(dbuffer, UZ, id) = static_cast<real_t>(0);
-    moment(dbuffer, MXX, id) = static_cast<real_t>(0);
-    moment(dbuffer, MYY, id) = static_cast<real_t>(0);
-    moment(dbuffer, MZZ, id) = static_cast<real_t>(0);
-    moment(dbuffer, MXY, id) = static_cast<real_t>(0);
-    moment(dbuffer, MXZ, id) = static_cast<real_t>(0);
-    moment(dbuffer, MYZ, id) = static_cast<real_t>(0);
+    for (natural_t k = 0; k < NUM_MOMENTS; ++k)
+    {
+        dbuffer[midx(idx, k)] = moments[midx(idx, k)];
+    }
 }
