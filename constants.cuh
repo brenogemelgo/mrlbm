@@ -30,15 +30,14 @@ using mask_t = uint8_t;
 // =================================================================================================== //
 
 constexpr natural_t L_CHAR = 256;
-constexpr real_t CHAR_VELOCITY = static_cast<real_t>(0.0256);
-constexpr real_t U_CHAR = CHAR_VELOCITY;
+constexpr real_t U_CHAR = static_cast<real_t>(0.0256);
 constexpr real_t REYNOLDS = static_cast<real_t>(10000);
-constexpr natural_t NSTEPS = 10000;
-constexpr natural_t STAMP = 1000;
+constexpr natural_t NSTEPS = 1;
+constexpr natural_t STAMP = 1;
 
 // =================================================================================================== //
 
-constexpr real_t VISCOSITY = static_cast<real_t>((static_cast<double>(CHAR_VELOCITY) * static_cast<double>(L_CHAR)) / static_cast<double>(REYNOLDS));
+constexpr real_t VISCOSITY = static_cast<real_t>((static_cast<double>(U_CHAR) * static_cast<double>(L_CHAR)) / static_cast<double>(REYNOLDS));
 constexpr real_t TAU = static_cast<real_t>(0.5) + static_cast<real_t>(3.0) * VISCOSITY;
 constexpr real_t OMEGA = static_cast<real_t>(static_cast<double>(1) / static_cast<double>(TAU));
 constexpr real_t T_OMEGA = static_cast<real_t>(1.0) - OMEGA;

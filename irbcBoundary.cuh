@@ -39,7 +39,7 @@ __device__ static __forceinline__ void boundaryVelocity(
 {
     if ((nodeType & FRONT) == FRONT)
     {
-        ubx = CHAR_VELOCITY;
+        ubx = U_CHAR;
         uby = static_cast<real_t>(0);
         ubz = static_cast<real_t>(0);
     }
@@ -59,7 +59,7 @@ __device__ static __forceinline__ void boundaryVelocityConst(
 {
     if constexpr ((nodeTypeValue & FRONT) == FRONT)
     {
-        ubx = CHAR_VELOCITY;
+        ubx = U_CHAR;
         uby = static_cast<real_t>(0);
         ubz = static_cast<real_t>(0);
     }
@@ -366,7 +366,7 @@ __host__ static inline void boundaryVelocityHost(
 {
     if ((nodeType & FRONT) == FRONT)
     {
-        ubx = CHAR_VELOCITY;
+        ubx = U_CHAR;
         uby = static_cast<real_t>(0);
         ubz = static_cast<real_t>(0);
     }
