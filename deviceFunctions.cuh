@@ -17,24 +17,6 @@ __device__ __host__ [[nodiscard]] static __forceinline__ natural_t midx(
     return idx + CELLS * moment;
 }
 
-namespace math
-{
-    __device__ __host__ [[nodiscard]] static __forceinline__ real_t fma(
-        const real_t x,
-        const real_t y,
-        const real_t z) noexcept
-    {
-        if constexpr (std::is_same_v<real_t, float>)
-        {
-            return ::fmaf(x, y, z);
-        }
-        else
-        {
-            return ::fma(x, y, z);
-        }
-    }
-}
-
 template <int c, natural_t N>
 __device__ [[nodiscard]] static inline natural_t periodicPull(const natural_t a) noexcept
 {
