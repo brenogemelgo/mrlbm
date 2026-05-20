@@ -2,7 +2,7 @@
 #include "kernel.cuh"
 #include "output.cuh"
 
-// #define BENCHMARK
+#define BENCHMARK
 
 #define CUDA_CHECK(call)                                                         \
     do                                                                           \

@@ -142,7 +142,9 @@ __device__ static __forceinline__ void applyIRBCBoundaryTyped(
     solved[5] = __fmaf_rn(IRBC_INVERSE[tableOffset + 35], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 36], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 37], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 38], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 39], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 40], rhs[5], IRBC_INVERSE[tableOffset + 41] * rhs[6]))))));
     solved[6] = __fmaf_rn(IRBC_INVERSE[tableOffset + 42], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 43], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 44], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 45], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 46], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 47], rhs[5], IRBC_INVERSE[tableOffset + 48] * rhs[6]))))));
 
-    const real_t invRho = static_cast<real_t>(1) / solved[0];
+    rho = solved[0];
+
+    const real_t invRho = static_cast<real_t>(1) / rho;
 
     ux = ubx;
     uy = uby;
@@ -220,7 +222,9 @@ __device__ static __forceinline__ void applyIRBCBoundary(
     solved[5] = __fmaf_rn(IRBC_INVERSE[tableOffset + 35], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 36], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 37], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 38], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 39], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 40], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 41], rhs[6], solved[5])))))));
     solved[6] = __fmaf_rn(IRBC_INVERSE[tableOffset + 42], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 43], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 44], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 45], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 46], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 47], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 48], rhs[6], solved[6])))))));
 
-    const real_t invRho = static_cast<real_t>(1) / solved[0];
+    rho = solved[0];
+
+    const real_t invRho = static_cast<real_t>(1) / rho;
 
     ux = ubx;
     uy = uby;
