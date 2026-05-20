@@ -3,11 +3,15 @@
 #include "bitmasks.cuh"
 #include "deviceFunctions.cuh"
 
+// ===================================================================================================================== //
+
 constexpr natural_t IRBC_UNKNOWNS = 7;
 constexpr natural_t IRBC_TABLE_STRIDE = IRBC_UNKNOWNS * IRBC_UNKNOWNS;
 constexpr natural_t IRBC_TABLE_SIZE = 64 * IRBC_TABLE_STRIDE;
 
 __device__ __constant__ real_t IRBC_INVERSE[IRBC_TABLE_SIZE];
+
+// ===================================================================================================================== //
 
 template <natural_t dir>
 __device__ [[nodiscard]] static __forceinline__ bool isMissingDirection(const unsigned int nodeType) noexcept
@@ -30,6 +34,8 @@ __device__ __host__ [[nodiscard]] static inline constexpr bool isMissingDirectio
            (((nodeTypeValue & BACK) == BACK) && (VelocitySet::cz<dir>() > 0)) ||
            (((nodeTypeValue & FRONT) == FRONT) && (VelocitySet::cz<dir>() < 0));
 }
+
+// ===================================================================================================================== //
 
 __device__ static __forceinline__ void boundaryVelocity(
     const unsigned int nodeType,
@@ -71,6 +77,8 @@ __device__ static __forceinline__ void boundaryVelocityConst(
     }
 }
 
+// ===================================================================================================================== //
+
 template <unsigned int nodeTypeValue>
 __device__ static __forceinline__ void applyIRBCBoundaryTyped(
     const real_t (&pop)[VelocitySet::Q()],
@@ -92,14 +100,13 @@ __device__ static __forceinline__ void applyIRBCBoundaryTyped(
     real_t ubz;
     boundaryVelocityConst<nodeTypeValue>(ubx, uby, ubz);
 
-    real_t rhs[IRBC_UNKNOWNS] = {
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0)};
+    real_t rhs[IRBC_UNKNOWNS] = {static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0)};
 
     constexpr_for<0, VelocitySet::Q()>(
         [&](const auto Q) noexcept
@@ -119,28 +126,23 @@ __device__ static __forceinline__ void applyIRBCBoundaryTyped(
 
     rhs[6] = static_cast<real_t>(0);
 
-    real_t solved[IRBC_UNKNOWNS] = {
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0)};
+    real_t solved[IRBC_UNKNOWNS] = {static_cast<real_t>(0),
+                                    static_cast<real_t>(0),
+                                    static_cast<real_t>(0),
+                                    static_cast<real_t>(0),
+                                    static_cast<real_t>(0),
+                                    static_cast<real_t>(0),
+                                    static_cast<real_t>(0)};
 
-#pragma unroll
-    for (natural_t row = 0; row < IRBC_UNKNOWNS; ++row)
-    {
-#pragma unroll
-        for (natural_t col = 0; col < IRBC_UNKNOWNS; ++col)
-        {
-            solved[row] += IRBC_INVERSE[tableOffset + row * IRBC_UNKNOWNS + col] * rhs[col];
-        }
-    }
+    solved[0] = __fmaf_rn(IRBC_INVERSE[tableOffset + 0], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 1], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 2], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 3], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 4], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 5], rhs[5], IRBC_INVERSE[tableOffset + 6] * rhs[6]))))));
+    solved[1] = __fmaf_rn(IRBC_INVERSE[tableOffset + 7], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 8], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 9], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 10], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 11], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 12], rhs[5], IRBC_INVERSE[tableOffset + 13] * rhs[6]))))));
+    solved[2] = __fmaf_rn(IRBC_INVERSE[tableOffset + 14], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 15], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 16], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 17], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 18], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 19], rhs[5], IRBC_INVERSE[tableOffset + 20] * rhs[6]))))));
+    solved[3] = __fmaf_rn(IRBC_INVERSE[tableOffset + 21], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 22], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 23], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 24], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 25], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 26], rhs[5], IRBC_INVERSE[tableOffset + 27] * rhs[6]))))));
+    solved[4] = __fmaf_rn(IRBC_INVERSE[tableOffset + 28], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 29], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 30], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 31], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 32], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 33], rhs[5], IRBC_INVERSE[tableOffset + 34] * rhs[6]))))));
+    solved[5] = __fmaf_rn(IRBC_INVERSE[tableOffset + 35], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 36], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 37], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 38], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 39], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 40], rhs[5], IRBC_INVERSE[tableOffset + 41] * rhs[6]))))));
+    solved[6] = __fmaf_rn(IRBC_INVERSE[tableOffset + 42], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 43], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 44], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 45], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 46], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 47], rhs[5], IRBC_INVERSE[tableOffset + 48] * rhs[6]))))));
 
-    rho = solved[0];
-
-    const real_t invRho = static_cast<real_t>(1) / rho;
+    const real_t invRho = static_cast<real_t>(1) / solved[0];
 
     ux = ubx;
     uy = uby;
@@ -175,14 +177,13 @@ __device__ static __forceinline__ void applyIRBCBoundary(
     real_t ubz;
     boundaryVelocity(nodeType, ubx, uby, ubz);
 
-    real_t rhs[IRBC_UNKNOWNS] = {
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0),
-        static_cast<real_t>(0)};
+    real_t rhs[IRBC_UNKNOWNS] = {static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0),
+                                 static_cast<real_t>(0)};
 
     constexpr_for<0, VelocitySet::Q()>(
         [&](const auto Q) noexcept
@@ -211,19 +212,15 @@ __device__ static __forceinline__ void applyIRBCBoundary(
         static_cast<real_t>(0),
         static_cast<real_t>(0)};
 
-#pragma unroll
-    for (natural_t row = 0; row < IRBC_UNKNOWNS; ++row)
-    {
-#pragma unroll
-        for (natural_t col = 0; col < IRBC_UNKNOWNS; ++col)
-        {
-            solved[row] += IRBC_INVERSE[tableOffset + row * IRBC_UNKNOWNS + col] * rhs[col];
-        }
-    }
+    solved[0] = __fmaf_rn(IRBC_INVERSE[tableOffset + 0], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 1], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 2], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 3], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 4], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 5], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 6], rhs[6], solved[0])))))));
+    solved[1] = __fmaf_rn(IRBC_INVERSE[tableOffset + 7], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 8], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 9], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 10], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 11], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 12], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 13], rhs[6], solved[1])))))));
+    solved[2] = __fmaf_rn(IRBC_INVERSE[tableOffset + 14], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 15], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 16], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 17], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 18], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 19], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 20], rhs[6], solved[2])))))));
+    solved[3] = __fmaf_rn(IRBC_INVERSE[tableOffset + 21], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 22], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 23], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 24], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 25], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 26], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 27], rhs[6], solved[3])))))));
+    solved[4] = __fmaf_rn(IRBC_INVERSE[tableOffset + 28], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 29], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 30], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 31], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 32], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 33], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 34], rhs[6], solved[4])))))));
+    solved[5] = __fmaf_rn(IRBC_INVERSE[tableOffset + 35], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 36], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 37], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 38], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 39], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 40], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 41], rhs[6], solved[5])))))));
+    solved[6] = __fmaf_rn(IRBC_INVERSE[tableOffset + 42], rhs[0], __fmaf_rn(IRBC_INVERSE[tableOffset + 43], rhs[1], __fmaf_rn(IRBC_INVERSE[tableOffset + 44], rhs[2], __fmaf_rn(IRBC_INVERSE[tableOffset + 45], rhs[3], __fmaf_rn(IRBC_INVERSE[tableOffset + 46], rhs[4], __fmaf_rn(IRBC_INVERSE[tableOffset + 47], rhs[5], __fmaf_rn(IRBC_INVERSE[tableOffset + 48], rhs[6], solved[6])))))));
 
-    rho = solved[0];
-
-    const real_t invRho = static_cast<real_t>(1) / rho;
+    const real_t invRho = static_cast<real_t>(1) / solved[0];
 
     ux = ubx;
     uy = uby;
@@ -342,6 +339,8 @@ __device__ static __forceinline__ void dispatchIRBCBoundary(
         return;
     }
 }
+
+// ===================================================================================================================== //
 
 template <unsigned int nodeTypeValue>
 __host__ [[nodiscard]] static inline constexpr bool isValidBoundaryTypeConst() noexcept
@@ -630,3 +629,5 @@ __host__ [[nodiscard]] static inline cudaError_t initIRBCBoundaryTables() noexce
 
     return cudaMemcpyToSymbol(IRBC_INVERSE, hostTable, sizeof(hostTable));
 }
+
+// ===================================================================================================================== //
