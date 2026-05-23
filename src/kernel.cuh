@@ -1,7 +1,7 @@
 #pragma once
 
 #include "deviceFunctions.cuh"
-#include "irbcBoundary.cuh"
+#include "boundary/deviceRuntime.cuh"
 
 __global__ void streamCollide(
     const real_t *__restrict__ moments,
@@ -42,10 +42,9 @@ __global__ void streamCollide(
                 constexpr int cx = VelocitySet::cx<Q>();
                 constexpr int cy = VelocitySet::cy<Q>();
                 constexpr int cz = VelocitySet::cz<Q>();
+                constexpr int offset = cx + cy * static_cast<int>(NX) + cz * static_cast<int>(STRIDE);
 
-                const natural_t src = global3(static_cast<natural_t>(static_cast<int>(x) - cx),
-                                              static_cast<natural_t>(static_cast<int>(y) - cy),
-                                              static_cast<natural_t>(static_cast<int>(z) - cz));
+                const natural_t src = idx - static_cast<natural_t>(offset);
 
                 const real_t cu = static_cast<real_t>(cx) * moments[midx(src, UX)] +
                                   static_cast<real_t>(cy) * moments[midx(src, UY)] +

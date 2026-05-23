@@ -17,12 +17,6 @@ __device__ __host__ [[nodiscard]] static __forceinline__ natural_t midx(
     return idx + CELLS * moment;
 }
 
-template <int c, natural_t N>
-__device__ [[nodiscard]] static inline natural_t periodicPull(const natural_t a) noexcept
-{
-    return (a - static_cast<natural_t>(c)) & (N - 1);
-}
-
 template <typename T, T v>
 struct IntegralConstant
 {

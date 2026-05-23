@@ -1,3 +1,4 @@
+#include "boundary/hostInitialization.cuh"
 #include "initialConditions.cuh"
 #include "kernel.cuh"
 #include "output.cuh"
