@@ -17,6 +17,14 @@ __device__ __host__ [[nodiscard]] static __forceinline__ natural_t midx(
     return idx + CELLS * moment;
 }
 
+__device__ [[nodiscard]] static __forceinline__ real_t loadMoment(
+    const real_t *__restrict__ moments,
+    const natural_t idx,
+    const natural_t moment) noexcept
+{
+    return __ldg(moments + midx(idx, moment));
+}
+
 template <typename T, T v>
 struct IntegralConstant
 {

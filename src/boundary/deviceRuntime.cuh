@@ -19,18 +19,18 @@ __device__ [[nodiscard]] static __forceinline__ real_t reconstructPopulation(
                                   static_cast<natural_t>(static_cast<int>(y) - cy),
                                   static_cast<natural_t>(static_cast<int>(z) - cz));
 
-    const real_t cu = static_cast<real_t>(cx) * moments[midx(src, UX)] +
-                      static_cast<real_t>(cy) * moments[midx(src, UY)] +
-                      static_cast<real_t>(cz) * moments[midx(src, UZ)];
+    const real_t cu = static_cast<real_t>(cx) * loadMoment(moments, src, UX) +
+                      static_cast<real_t>(cy) * loadMoment(moments, src, UY) +
+                      static_cast<real_t>(cz) * loadMoment(moments, src, UZ);
 
-    const real_t mh = moments[midx(src, MXX)] * VelocitySet::hxx<Q>() +
-                      moments[midx(src, MYY)] * VelocitySet::hyy<Q>() +
-                      moments[midx(src, MZZ)] * VelocitySet::hzz<Q>() +
-                      moments[midx(src, MXY)] * VelocitySet::hxy<Q>() +
-                      moments[midx(src, MXZ)] * VelocitySet::hxz<Q>() +
-                      moments[midx(src, MYZ)] * VelocitySet::hyz<Q>();
+    const real_t mh = loadMoment(moments, src, MXX) * VelocitySet::hxx<Q>() +
+                      loadMoment(moments, src, MYY) * VelocitySet::hyy<Q>() +
+                      loadMoment(moments, src, MZZ) * VelocitySet::hzz<Q>() +
+                      loadMoment(moments, src, MXY) * VelocitySet::hxy<Q>() +
+                      loadMoment(moments, src, MXZ) * VelocitySet::hxz<Q>() +
+                      loadMoment(moments, src, MYZ) * VelocitySet::hyz<Q>();
 
-    const real_t wrho = VelocitySet::w<Q>() * moments[midx(src, RHO)];
+    const real_t wrho = VelocitySet::w<Q>() * loadMoment(moments, src, RHO);
     return __fmaf_rn(wrho, cu + mh, wrho);
 }
 
