@@ -1,4 +1,5 @@
 #include "boundary/hostInitialization.cuh"
+#include "diagnostics.cuh"
 #include "initialConditions.cuh"
 #include "kernel.cuh"
 #include "output.cuh"
@@ -43,6 +44,13 @@ int main(int argc, char **argv)
     CUDA_CHECK(cudaFuncSetCacheConfig(streamCollide, cudaFuncCachePreferL1));
     CUDA_CHECK(initIRBCBoundaryTables());
 
+#ifndef BENCHMARK
+    KineticEnergyDiagnostics kineticDiagnostics;
+    CUDA_CHECK(initKineticEnergyDiagnostics(kineticDiagnostics));
+    openKineticEnergyDiagnosticOutput(kineticDiagnostics, continueFromCheckpoint);
+    KineticEnergySample kineticEnergy;
+#endif
+
     natural_t startStep = 0;
     if (continueFromCheckpoint)
     {
@@ -76,6 +84,8 @@ int main(int argc, char **argv)
         std::swap(moments, dbuffer);
 
 #ifndef BENCHMARK
+        CUDA_CHECK(updateKineticEnergyStatistics(kineticDiagnostics, moments));
+
         if ((t + 1) % STAMP == 0)
         {
             CUDA_CHECK(cudaDeviceSynchronize());
@@ -89,6 +99,9 @@ int main(int argc, char **argv)
             std::cout << std::endl;
             std::cout << "step " << (t + 1) << " / " << NSTEPS << std::endl;
             std::cout << "MLUPS: " << stampMlups << std::endl;
+
+            CUDA_CHECK(computeKineticEnergyDiagnostics(kineticDiagnostics, moments, kineticEnergy));
+            writeKineticEnergyDiagnostics(kineticDiagnostics, t + 1, kineticEnergy);
 
             writeOutput(moments, t + 1);
 
@@ -108,6 +121,11 @@ int main(int argc, char **argv)
     std::cout << std::endl;
     std::cout << "elapsed: " << elapsed.count() << " s" << std::endl;
     std::cout << "MLUPS: " << mlups << std::endl;
+
+#ifndef BENCHMARK
+    closeKineticEnergyDiagnosticOutput(kineticDiagnostics);
+    CUDA_CHECK(destroyKineticEnergyDiagnostics(kineticDiagnostics));
+#endif
 
     CUDA_CHECK(cudaFree(momentsAlloc));
     CUDA_CHECK(cudaFree(dbufferAlloc));
