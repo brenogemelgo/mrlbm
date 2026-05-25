@@ -84,7 +84,7 @@ int main(int argc, char **argv)
         std::swap(moments, dbuffer);
 
 #ifndef BENCHMARK
-        CUDA_CHECK(updateKineticEnergyStatistics(kineticDiagnostics, moments));
+        // CUDA_CHECK(updateKineticEnergyStatistics(kineticDiagnostics, moments));
 
         if ((t + 1) % STAMP == 0)
         {
@@ -100,8 +100,8 @@ int main(int argc, char **argv)
             std::cout << "step " << (t + 1) << " / " << NSTEPS << std::endl;
             std::cout << "MLUPS: " << stampMlups << std::endl;
 
-            CUDA_CHECK(computeKineticEnergyDiagnostics(kineticDiagnostics, moments, kineticEnergy));
-            writeKineticEnergyDiagnostics(kineticDiagnostics, t + 1, kineticEnergy);
+            // CUDA_CHECK(computeKineticEnergyDiagnostics(kineticDiagnostics, moments, kineticEnergy));
+            // writeKineticEnergyDiagnostics(kineticDiagnostics, t + 1, kineticEnergy);
 
             writeOutput(moments, t + 1);
 

@@ -2,7 +2,7 @@
 
 #include "constants.cuh"
 
-#ifdef D3Q27
+#ifdef D3Q19
 
 struct VelocitySet
 {
@@ -14,11 +14,11 @@ struct VelocitySet
     template <natural_t dir>
     __device__ __host__ [[nodiscard]] static __forceinline__ consteval int cx() noexcept
     {
-        if constexpr (dir == 1 || dir == 7 || dir == 9 || dir == 13 || dir == 15 || dir == 19 || dir == 21 || dir == 23 || dir == 26)
+        if constexpr (dir == 1 || dir == 7 || dir == 9 || dir == 13 || dir == 15)
         {
             return 1;
         }
-        else if constexpr (dir == 2 || dir == 8 || dir == 10 || dir == 14 || dir == 16 || dir == 20 || dir == 22 || dir == 24 || dir == 25)
+        else if constexpr (dir == 2 || dir == 8 || dir == 10 || dir == 14 || dir == 16)
         {
             return -1;
         }
@@ -31,11 +31,11 @@ struct VelocitySet
     template <natural_t dir>
     __device__ __host__ [[nodiscard]] static __forceinline__ consteval int cy() noexcept
     {
-        if constexpr (dir == 3 || dir == 7 || dir == 11 || dir == 14 || dir == 17 || dir == 19 || dir == 21 || dir == 24 || dir == 25)
+        if constexpr (dir == 3 || dir == 7 || dir == 11 || dir == 14 || dir == 17)
         {
             return 1;
         }
-        else if constexpr (dir == 4 || dir == 8 || dir == 12 || dir == 13 || dir == 18 || dir == 20 || dir == 22 || dir == 23 || dir == 26)
+        else if constexpr (dir == 4 || dir == 8 || dir == 12 || dir == 13 || dir == 18)
         {
             return -1;
         }
@@ -48,11 +48,11 @@ struct VelocitySet
     template <natural_t dir>
     __device__ __host__ [[nodiscard]] static __forceinline__ consteval int cz() noexcept
     {
-        if constexpr (dir == 5 || dir == 9 || dir == 11 || dir == 16 || dir == 18 || dir == 19 || dir == 22 || dir == 23 || dir == 25)
+        if constexpr (dir == 5 || dir == 9 || dir == 11 || dir == 16 || dir == 18)
         {
             return 1;
         }
-        else if constexpr (dir == 6 || dir == 10 || dir == 12 || dir == 15 || dir == 17 || dir == 20 || dir == 21 || dir == 24 || dir == 26)
+        else if constexpr (dir == 6 || dir == 10 || dir == 12 || dir == 15 || dir == 17)
         {
             return -1;
         }
@@ -67,19 +67,15 @@ struct VelocitySet
     {
         if constexpr (dir == 0)
         {
-            return static_cast<real_t>(static_cast<double>(8) / static_cast<double>(27));
+            return static_cast<real_t>(static_cast<double>(1) / static_cast<double>(3));
         }
         else if constexpr (dir <= 6)
         {
-            return static_cast<real_t>(static_cast<double>(2) / static_cast<double>(27));
-        }
-        else if constexpr (dir <= 18)
-        {
-            return static_cast<real_t>(static_cast<double>(1) / static_cast<double>(54));
+            return static_cast<real_t>(static_cast<double>(1) / static_cast<double>(18));
         }
         else
         {
-            return static_cast<real_t>(static_cast<double>(1) / static_cast<double>(216));
+            return static_cast<real_t>(static_cast<double>(1) / static_cast<double>(36));
         }
     }
 
