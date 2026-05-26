@@ -21,7 +21,7 @@
 #include <stdexcept>
 #include <string>
 
-#define D3Q19
+#define D3Q27
 
 // =================================================================================================== //
 
@@ -31,9 +31,9 @@ using real_t = float;
 // =================================================================================================== //
 
 constexpr natural_t L_CHAR = 256;
-constexpr real_t U_CHAR = static_cast<real_t>(0.0256);
+constexpr real_t U_CHAR = static_cast<real_t>(0.05);
 constexpr real_t REYNOLDS = static_cast<real_t>(10000);
-constexpr natural_t NSTEPS = 10000;
+constexpr natural_t NSTEPS = 500000;
 constexpr natural_t STAMP = 1000;
 
 // =================================================================================================== //

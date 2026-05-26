@@ -1,7 +1,7 @@
 #include "boundary/hostInitialization.cuh"
-#include "diagnostics.cuh"
 #include "initialConditions.cuh"
 #include "kernel.cuh"
+#include "ldcProfiles.cuh"
 #include "output.cuh"
 
 // #define BENCHMARK
@@ -17,16 +17,68 @@
         }                                                                        \
     } while (false)
 
+static bool startsWith(
+    const std::string &value,
+    const char *prefix)
+{
+    const std::size_t prefixLength = std::strlen(prefix);
+    return value.size() >= prefixLength && value.compare(0, prefixLength, prefix) == 0;
+}
+
+static bool isValidCaseId(
+    const std::string &caseId)
+{
+    return !caseId.empty() &&
+           caseId != "." &&
+           caseId != ".." &&
+           caseId.find('/') == std::string::npos &&
+           caseId.find('\\') == std::string::npos;
+}
+
 int main(int argc, char **argv)
 {
     bool continueFromCheckpoint = false;
+    std::string caseId = "default";
+
     for (int arg = 1; arg < argc; ++arg)
     {
-        if (std::strcmp(argv[arg], "--continue") == 0 || std::strcmp(argv[arg], "continue") == 0)
+        const std::string argument(argv[arg]);
+
+        if (argument == "--continue" || argument == "continue")
         {
             continueFromCheckpoint = true;
         }
+        else if (argument == "--case-id")
+        {
+            if (arg + 1 >= argc)
+            {
+                std::cerr << "Missing value for --case-id" << std::endl;
+                return EXIT_FAILURE;
+            }
+            caseId = argv[++arg];
+        }
+        else if (startsWith(argument, "--case-id="))
+        {
+            caseId = argument.substr(std::strlen("--case-id="));
+        }
+        else if (!argument.empty() && argument[0] != '-' && caseId == "default")
+        {
+            caseId = argument;
+        }
+        else
+        {
+            std::cerr << "Unknown argument: " << argument << std::endl;
+            return EXIT_FAILURE;
+        }
     }
+
+    if (!isValidCaseId(caseId))
+    {
+        std::cerr << "Invalid case id: " << caseId << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    setSimulationOutputDirectory(std::filesystem::path("output") / caseId);
 
     real_t *moments = nullptr;
     real_t *dbuffer = nullptr;
@@ -45,10 +97,7 @@ int main(int argc, char **argv)
     CUDA_CHECK(initIRBCBoundaryTables());
 
 #ifndef BENCHMARK
-    KineticEnergyDiagnostics kineticDiagnostics;
-    CUDA_CHECK(initKineticEnergyDiagnostics(kineticDiagnostics));
-    openKineticEnergyDiagnosticOutput(kineticDiagnostics, continueFromCheckpoint);
-    KineticEnergySample kineticEnergy;
+    LdcProfileSamples ldcProfiles;
 #endif
 
     natural_t startStep = 0;
@@ -63,6 +112,10 @@ int main(int argc, char **argv)
         CUDA_CHECK(cudaDeviceSynchronize());
     }
 
+#ifndef BENCHMARK
+    CUDA_CHECK(initLdcProfileSamples(ldcProfiles, NSTEPS > startStep ? NSTEPS - startStep : 0));
+#endif
+
     std::cout << std::endl;
     if (continueFromCheckpoint)
     {
@@ -72,6 +125,11 @@ int main(int argc, char **argv)
     {
         std::cout << "simulation start" << std::endl;
     }
+    std::cout << "case id: " << caseId << std::endl;
+    std::cout << "output: " << getSimulationOutputDirectory() << std::endl;
+#ifndef BENCHMARK
+    std::cout << "LDC profile samples: every timestep" << std::endl;
+#endif
     const auto start = std::chrono::high_resolution_clock::now();
 #ifndef BENCHMARK
     auto lastStamp = start;
@@ -84,7 +142,7 @@ int main(int argc, char **argv)
         std::swap(moments, dbuffer);
 
 #ifndef BENCHMARK
-        // CUDA_CHECK(updateKineticEnergyStatistics(kineticDiagnostics, moments));
+        CUDA_CHECK(writeLdcProfileSample(ldcProfiles, moments, t + 1));
 
         if ((t + 1) % STAMP == 0)
         {
@@ -99,9 +157,6 @@ int main(int argc, char **argv)
             std::cout << std::endl;
             std::cout << "step " << (t + 1) << " / " << NSTEPS << std::endl;
             std::cout << "MLUPS: " << stampMlups << std::endl;
-
-            // CUDA_CHECK(computeKineticEnergyDiagnostics(kineticDiagnostics, moments, kineticEnergy));
-            // writeKineticEnergyDiagnostics(kineticDiagnostics, t + 1, kineticEnergy);
 
             writeOutput(moments, t + 1);
 
@@ -123,8 +178,8 @@ int main(int argc, char **argv)
     std::cout << "MLUPS: " << mlups << std::endl;
 
 #ifndef BENCHMARK
-    closeKineticEnergyDiagnosticOutput(kineticDiagnostics);
-    CUDA_CHECK(destroyKineticEnergyDiagnostics(kineticDiagnostics));
+    writeLdcProfileSamples(ldcProfiles, getSimulationOutputDirectory());
+    CUDA_CHECK(destroyLdcProfileSamples(ldcProfiles));
 #endif
 
     CUDA_CHECK(cudaFree(momentsAlloc));

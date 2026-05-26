@@ -69,6 +69,23 @@ static inline std::string outputStepName(const natural_t step)
     return name.str();
 }
 
+static inline std::filesystem::path &simulationOutputDirectory()
+{
+    static std::filesystem::path dir("output/default");
+    return dir;
+}
+
+static inline void setSimulationOutputDirectory(
+    const std::filesystem::path &dir)
+{
+    simulationOutputDirectory() = dir;
+}
+
+static inline const std::filesystem::path &getSimulationOutputDirectory()
+{
+    return simulationOutputDirectory();
+}
+
 static inline void writeBinary(
     const real_t *deviceMoments,
     const std::filesystem::path &path)
@@ -134,7 +151,7 @@ static inline bool findLatestOutputBinary(
     std::filesystem::path &binaryPath,
     natural_t &step)
 {
-    const std::filesystem::path dir("output");
+    const std::filesystem::path dir = getSimulationOutputDirectory();
     if (!std::filesystem::exists(dir))
     {
         return false;
@@ -210,7 +227,7 @@ static inline natural_t loadLatestCheckpoint(
     natural_t step = 0;
     if (!findLatestOutputBinary(binaryPath, step))
     {
-        std::cerr << "No checkpoint found in output/" << std::endl;
+        std::cerr << "No checkpoint found in " << getSimulationOutputDirectory() << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
@@ -291,7 +308,7 @@ static inline void writeOutput(
     const real_t *deviceMoments,
     const natural_t step)
 {
-    const std::filesystem::path dir("output");
+    const std::filesystem::path dir = getSimulationOutputDirectory();
     std::filesystem::create_directories(dir);
 
     const std::string base = outputStepName(step);
