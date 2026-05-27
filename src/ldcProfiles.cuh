@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <string>
 #include <vector>
 
 constexpr natural_t LDC_PROFILE_THREADS = 256;
@@ -24,10 +25,12 @@ constexpr natural_t LDC_PROFILE_VALUES = (NX + NZ) * LDC_PROFILE_FIELDS;
 struct LdcProfileSamples
 {
     real_t *deviceSample = nullptr;
-    std::vector<real_t> hostSamples;
-    std::vector<natural_t> steps;
+    std::vector<real_t> hostSample;
+    std::ofstream cxSamplesOutput;
+    std::ofstream cySamplesOutput;
+    std::ofstream stepsOutput;
+    std::filesystem::path profileDir;
     natural_t samples = 0;
-    natural_t capacity = 0;
 };
 
 __device__ [[nodiscard]] static __forceinline__ natural_t ldcProfileIndex(
@@ -52,8 +55,9 @@ __device__ static __forceinline__ void ldcAccumulatePoint(
     natural_t &samples) noexcept
 {
     const natural_t idx = global3(x, y, z);
-    const real_t ux = loadMoment(moments, idx, UX);
-    const real_t uz = loadMoment(moments, idx, UZ);
+    const real_t invVelocityScale = static_cast<real_t>(1) / VelocitySet::scaleI();
+    const real_t ux = loadMoment(moments, idx, UX) * invVelocityScale;
+    const real_t uz = loadMoment(moments, idx, UZ) * invVelocityScale;
 
     sumUx += ux;
     sumUz += uz;
@@ -140,87 +144,6 @@ __global__ void writeLdcProfileSampleKernel(
     }
 }
 
-static inline cudaError_t initLdcProfileSamples(
-    LdcProfileSamples &profiles,
-    const natural_t capacity)
-{
-    profiles.hostSamples.clear();
-    profiles.steps.clear();
-    profiles.samples = 0;
-    profiles.capacity = capacity;
-
-    const size_t sampleValues = static_cast<size_t>(capacity) * static_cast<size_t>(LDC_PROFILE_VALUES);
-    profiles.hostSamples.assign(sampleValues, static_cast<real_t>(0));
-    profiles.steps.reserve(capacity);
-
-    if (capacity == 0)
-    {
-        return cudaSuccess;
-    }
-
-    cudaError_t err = cudaMalloc(reinterpret_cast<void **>(&profiles.deviceSample),
-                                 LDC_PROFILE_VALUES * sizeof(real_t));
-    if (err != cudaSuccess)
-    {
-        return err;
-    }
-
-    return cudaSuccess;
-}
-
-static inline cudaError_t destroyLdcProfileSamples(
-    LdcProfileSamples &profiles)
-{
-    cudaError_t err = cudaSuccess;
-    if (profiles.deviceSample != nullptr)
-    {
-        err = cudaFree(profiles.deviceSample);
-    }
-
-    profiles.deviceSample = nullptr;
-    profiles.hostSamples.clear();
-    profiles.steps.clear();
-    profiles.samples = 0;
-    profiles.capacity = 0;
-    return err;
-}
-
-static inline cudaError_t writeLdcProfileSample(
-    LdcProfileSamples &profiles,
-    const real_t *__restrict__ moments,
-    const natural_t step)
-{
-    if (profiles.samples >= profiles.capacity)
-    {
-        return cudaErrorInvalidValue;
-    }
-
-    constexpr natural_t profileLength = NX > NZ ? NX : NZ;
-    constexpr natural_t blocks = (profileLength + LDC_PROFILE_THREADS - 1) / LDC_PROFILE_THREADS;
-
-    writeLdcProfileSampleKernel<<<blocks, LDC_PROFILE_THREADS>>>(moments, profiles.deviceSample, 0);
-
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess)
-    {
-        return err;
-    }
-
-    const size_t hostOffset = static_cast<size_t>(profiles.samples) * static_cast<size_t>(LDC_PROFILE_VALUES);
-    err = cudaMemcpy(profiles.hostSamples.data() + hostOffset,
-                     profiles.deviceSample,
-                     LDC_PROFILE_VALUES * sizeof(real_t),
-                     cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess)
-    {
-        return err;
-    }
-
-    profiles.steps.push_back(step);
-    ++profiles.samples;
-    return cudaSuccess;
-}
-
 static inline double ldcProfileCoordinate(
     const natural_t coordinate,
     const natural_t length)
@@ -252,64 +175,66 @@ static inline void writeLdcProfileCoordinates(
     }
 }
 
-static inline void writeLdcProfileBinary(
-    const LdcProfileSamples &profiles,
-    const std::filesystem::path &path,
-    const natural_t offset,
-    const natural_t length)
+static inline natural_t countExistingLdcProfileSamples(
+    const std::filesystem::path &stepsPath)
 {
-    std::ofstream out(path, std::ios::binary);
-    if (!out)
+    std::ifstream in(stepsPath);
+    if (!in)
     {
-        std::cerr << "Could not open LDC profile sample output: " << path << std::endl;
-        std::exit(EXIT_FAILURE);
+        return 0;
     }
 
-    for (natural_t sample = 0; sample < profiles.samples; ++sample)
+    std::string line;
+    natural_t samples = 0;
+    bool firstLine = true;
+    while (std::getline(in, line))
     {
-        const size_t base = static_cast<size_t>(sample) * static_cast<size_t>(LDC_PROFILE_VALUES) + offset;
-        out.write(reinterpret_cast<const char *>(profiles.hostSamples.data() + base),
-                  static_cast<std::streamsize>(length * LDC_PROFILE_FIELDS * sizeof(real_t)));
-        if (!out)
+        if (firstLine)
         {
-            std::cerr << "Could not write LDC profile sample output: " << path << std::endl;
-            std::exit(EXIT_FAILURE);
+            firstLine = false;
+            continue;
+        }
+        if (!line.empty())
+        {
+            ++samples;
         }
     }
+
+    return samples;
 }
 
-static inline void writeLdcProfileSamples(
-    LdcProfileSamples &profiles,
-    const std::filesystem::path &outputDir)
+static inline bool existingLdcProfileSamplesAreCompatible(
+    const std::filesystem::path &metadataPath)
 {
-    const std::filesystem::path profileDir = outputDir / "profiles";
-    std::filesystem::create_directories(profileDir);
-
-    const size_t sampleValues = static_cast<size_t>(profiles.samples) * static_cast<size_t>(LDC_PROFILE_VALUES);
-    if (profiles.hostSamples.size() < sampleValues)
+    std::ifstream in(metadataPath);
+    if (!in)
     {
-        std::cerr << "LDC profile host sample buffer is incomplete" << std::endl;
-        std::exit(EXIT_FAILURE);
+        return false;
     }
 
-    writeLdcProfileBinary(profiles, profileDir / "centerline_cx_samples.bin", LDC_PROFILE_CX_OFFSET, NX);
-    writeLdcProfileBinary(profiles, profileDir / "centerline_cy_samples.bin", LDC_PROFILE_CY_OFFSET, NZ);
-    writeLdcProfileCoordinates(profileDir / "centerline_cx_coordinates.csv", NX);
-    writeLdcProfileCoordinates(profileDir / "centerline_cy_coordinates.csv", NZ);
-
-    std::ofstream steps(profileDir / "sample_steps.csv");
-    if (!steps)
+    std::string line;
+    if (!std::getline(in, line))
     {
-        std::cerr << "Could not open LDC profile step output" << std::endl;
-        std::exit(EXIT_FAILURE);
+        return false;
     }
 
-    steps << "sample,step\n";
-    for (natural_t sample = 0; sample < profiles.samples; ++sample)
+    while (std::getline(in, line))
     {
-        steps << sample << ',' << profiles.steps[sample] << '\n';
+        constexpr const char *key = "sample_velocity_scale,";
+        constexpr std::size_t keyLength = 22;
+        if (line.compare(0, keyLength, key) == 0)
+        {
+            return line.substr(keyLength) == "1";
+        }
     }
 
+    return false;
+}
+
+static inline void writeLdcProfileMetadata(
+    const std::filesystem::path &profileDir,
+    const natural_t samples)
+{
     std::ofstream metadata(profileDir / "metadata.csv");
     if (!metadata)
     {
@@ -318,12 +243,160 @@ static inline void writeLdcProfileSamples(
     }
 
     metadata << "key,value\n";
-    metadata << "sample_count," << profiles.samples << '\n';
+    metadata << "sample_count," << samples << '\n';
     metadata << "cx_length," << NX << '\n';
     metadata << "cy_length," << NZ << '\n';
     metadata << "fields,ux;uz;ux2;uz2;uxuz\n";
     metadata << "real_t_bytes," << sizeof(real_t) << '\n';
+    metadata << "sample_velocity_scale,1\n";
     metadata << "u_char," << std::setprecision(17) << static_cast<double>(U_CHAR) << '\n';
     metadata << "coordinate_min,-1\n";
     metadata << "coordinate_max,1\n";
+}
+
+static inline cudaError_t initLdcProfileSamples(
+    LdcProfileSamples &profiles,
+    const std::filesystem::path &outputDir,
+    const bool append)
+{
+    profiles.hostSample.assign(LDC_PROFILE_VALUES, static_cast<real_t>(0));
+    profiles.profileDir = outputDir / "profiles";
+    std::filesystem::create_directories(profiles.profileDir);
+
+    const std::filesystem::path cxPath = profiles.profileDir / "centerline_cx_samples.bin";
+    const std::filesystem::path cyPath = profiles.profileDir / "centerline_cy_samples.bin";
+    const std::filesystem::path stepsPath = profiles.profileDir / "sample_steps.csv";
+    const std::filesystem::path metadataPath = profiles.profileDir / "metadata.csv";
+
+    profiles.samples = append ? countExistingLdcProfileSamples(stepsPath) : 0;
+    if (append && profiles.samples > 0 && !existingLdcProfileSamplesAreCompatible(metadataPath))
+    {
+        std::cerr << "Existing LDC profile samples in " << profiles.profileDir
+                  << " use legacy scaled velocity storage. Refusing to append physical samples into the same files."
+                  << std::endl;
+        std::cerr << "Post-process the existing data as-is, or move/remove profiles/ before continuing diagnostics."
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    const std::ios::openmode sampleMode = std::ios::binary | (append ? std::ios::app : std::ios::trunc);
+    profiles.cxSamplesOutput.open(cxPath, sampleMode);
+    profiles.cySamplesOutput.open(cyPath, sampleMode);
+
+    const bool writeStepsHeader = !append || profiles.samples == 0 || !std::filesystem::exists(stepsPath);
+    profiles.stepsOutput.open(stepsPath, std::ios::out | (append && !writeStepsHeader ? std::ios::app : std::ios::trunc));
+
+    if (!profiles.cxSamplesOutput || !profiles.cySamplesOutput || !profiles.stepsOutput)
+    {
+        std::cerr << "Could not open LDC profile streaming outputs in " << profiles.profileDir << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    if (writeStepsHeader)
+    {
+        profiles.stepsOutput << "sample,step\n";
+    }
+
+    writeLdcProfileCoordinates(profiles.profileDir / "centerline_cx_coordinates.csv", NX);
+    writeLdcProfileCoordinates(profiles.profileDir / "centerline_cy_coordinates.csv", NZ);
+    writeLdcProfileMetadata(profiles.profileDir, profiles.samples);
+
+    cudaError_t err = cudaMalloc(reinterpret_cast<void **>(&profiles.deviceSample),
+                                 LDC_PROFILE_VALUES * sizeof(real_t));
+    if (err != cudaSuccess)
+    {
+        return err;
+    }
+
+    return cudaSuccess;
+}
+
+static inline cudaError_t destroyLdcProfileSamples(
+    LdcProfileSamples &profiles)
+{
+    profiles.cxSamplesOutput.close();
+    profiles.cySamplesOutput.close();
+    profiles.stepsOutput.close();
+
+    cudaError_t err = cudaSuccess;
+    if (profiles.deviceSample != nullptr)
+    {
+        err = cudaFree(profiles.deviceSample);
+    }
+
+    profiles.deviceSample = nullptr;
+    profiles.hostSample.clear();
+    profiles.profileDir.clear();
+    profiles.samples = 0;
+    return err;
+}
+
+static inline void writeLdcProfileSampleChunk(
+    std::ofstream &out,
+    const std::vector<real_t> &sample,
+    const natural_t offset,
+    const natural_t length,
+    const std::filesystem::path &profileDir)
+{
+    out.write(reinterpret_cast<const char *>(sample.data() + offset),
+              static_cast<std::streamsize>(length * LDC_PROFILE_FIELDS * sizeof(real_t)));
+    if (!out)
+    {
+        std::cerr << "Could not write LDC profile samples in " << profileDir << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+static inline cudaError_t writeLdcProfileSample(
+    LdcProfileSamples &profiles,
+    const real_t *__restrict__ moments,
+    const natural_t step)
+{
+    constexpr natural_t profileLength = NX > NZ ? NX : NZ;
+    constexpr natural_t blocks = (profileLength + LDC_PROFILE_THREADS - 1) / LDC_PROFILE_THREADS;
+
+    writeLdcProfileSampleKernel<<<blocks, LDC_PROFILE_THREADS>>>(moments, profiles.deviceSample, 0);
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess)
+    {
+        return err;
+    }
+
+    err = cudaMemcpy(profiles.hostSample.data(),
+                     profiles.deviceSample,
+                     LDC_PROFILE_VALUES * sizeof(real_t),
+                     cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess)
+    {
+        return err;
+    }
+
+    writeLdcProfileSampleChunk(profiles.cxSamplesOutput, profiles.hostSample, LDC_PROFILE_CX_OFFSET, NX, profiles.profileDir);
+    writeLdcProfileSampleChunk(profiles.cySamplesOutput, profiles.hostSample, LDC_PROFILE_CY_OFFSET, NZ, profiles.profileDir);
+
+    profiles.stepsOutput << profiles.samples << ',' << step << '\n';
+    if (!profiles.stepsOutput)
+    {
+        std::cerr << "Could not write LDC profile sample steps in " << profiles.profileDir << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    ++profiles.samples;
+    profiles.cxSamplesOutput.flush();
+    profiles.cySamplesOutput.flush();
+    profiles.stepsOutput.flush();
+    writeLdcProfileMetadata(profiles.profileDir, profiles.samples);
+
+    return cudaSuccess;
+}
+
+static inline void writeLdcProfileSamples(
+    LdcProfileSamples &profiles,
+    const std::filesystem::path &)
+{
+    profiles.cxSamplesOutput.flush();
+    profiles.cySamplesOutput.flush();
+    profiles.stepsOutput.flush();
+    writeLdcProfileMetadata(profiles.profileDir, profiles.samples);
 }

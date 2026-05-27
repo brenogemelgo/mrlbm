@@ -14,15 +14,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-REFERENCE_RE = re.compile(r"^(uxRMS|uyRMS|uxuy|ux|uy)_(cx|cy)_([^_]+)_([^_]+)\.csv$")
+REFERENCE_RE = re.compile(r"^(uxRMS|uyRMS|uxuy|ux|uy)_(cx|cy)_(\d+)_1\.csv$")
+CASE_RE_RE = re.compile(r"(?:^|[_-])re(\d+)(?:[_-]|$)", re.IGNORECASE)
 FIELDS = ("ux", "uz", "ux2", "uz2", "uxuz")
 
 VARIABLE_MAP = {
-    "ux": ("ux", "ux"),
-    "uy": ("uz", "uz"),
-    "uxRMS": ("ux_rms", "ux RMS"),
-    "uyRMS": ("uz_rms", "uz RMS"),
-    "uxuy": ("uxuz", "uxuz covariance"),
+    "ux": ("ux", "ux", 1.0),
+    "uy": ("uz", "uz", 1.0),
+    "uxRMS": ("ux_rms", "ux RMS", 10.0),
+    "uyRMS": ("uz_rms", "uz RMS", 10.0),
+    "uxuy": ("uxuz", "uxuz covariance", 500.0),
 }
 
 
@@ -33,7 +34,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference-dir", default=None, help="Directory containing reference CSV files.")
     parser.add_argument("--step-min", "--tstep-min", type=int, default=None, help="First timestep to include.")
     parser.add_argument("--step-max", "--tstep-max", type=int, default=None, help="Last timestep to include.")
+    parser.add_argument("--chunk-samples", type=int, default=4096, help="Profile samples to process per chunk.")
     return parser.parse_args()
+
+
+def case_reynolds(case_id: str) -> str:
+    match = CASE_RE_RE.search(case_id)
+    if not match:
+        raise ValueError(f"case id must include Reynolds number like re10000: {case_id}")
+    return match.group(1)
 
 
 def read_named_csv(path: Path) -> dict[str, np.ndarray]:
@@ -116,32 +125,73 @@ def read_coordinates(path: Path, expected_length: int) -> np.ndarray:
     return s
 
 
-def read_samples(path: Path, sample_count: int, length: int, dtype: np.dtype) -> np.ndarray:
+def check_sample_file(path: Path, sample_count: int, length: int, dtype: np.dtype) -> None:
     expected = sample_count * length * len(FIELDS)
-    raw = np.fromfile(path, dtype=dtype)
-    if raw.size != expected:
-        raise ValueError(f"{path} has {raw.size} values, expected {expected}")
-    return raw.reshape(sample_count, length, len(FIELDS)).astype(np.float64, copy=False)
+    bytes_expected = expected * dtype.itemsize
+    bytes_actual = path.stat().st_size
+    if bytes_actual != bytes_expected:
+        values_actual = bytes_actual // dtype.itemsize
+        raise ValueError(f"{path} has {values_actual} values, expected {expected}")
 
 
-def select_steps(steps: np.ndarray, step_min: int | None, step_max: int | None) -> np.ndarray:
-    mask = np.ones(steps.shape, dtype=bool)
+def select_steps(steps: np.ndarray, step_min: int | None, step_max: int | None) -> tuple[np.ndarray, int]:
+    _, reverse_indices = np.unique(steps[::-1], return_index=True)
+    keep_last_duplicate = np.zeros(steps.shape, dtype=bool)
+    keep_last_duplicate[steps.size - 1 - reverse_indices] = True
+
+    mask = keep_last_duplicate.copy()
     if step_min is not None:
         mask &= steps >= step_min
     if step_max is not None:
         mask &= steps <= step_max
     if not np.any(mask):
         raise ValueError("selected timestep window contains no profile samples")
-    return mask
+    dropped_duplicates = int(steps.size - keep_last_duplicate.sum())
+    return mask, dropped_duplicates
 
 
-def compute_window_profile(samples: np.ndarray, coordinates: np.ndarray, mask: np.ndarray, u_char: float) -> dict[str, np.ndarray]:
-    selected = samples[mask]
-    mean_ux = selected[:, :, 0].mean(axis=0)
-    mean_uz = selected[:, :, 1].mean(axis=0)
-    mean_ux2 = selected[:, :, 2].mean(axis=0)
-    mean_uz2 = selected[:, :, 3].mean(axis=0)
-    mean_uxuz = selected[:, :, 4].mean(axis=0)
+def compute_window_profile(
+    sample_path: Path,
+    sample_count: int,
+    coordinates: np.ndarray,
+    mask: np.ndarray,
+    dtype: np.dtype,
+    u_char: float,
+    sample_velocity_scale: float,
+    chunk_samples: int,
+) -> dict[str, np.ndarray]:
+    if chunk_samples <= 0:
+        raise ValueError("--chunk-samples must be positive")
+
+    length = coordinates.size
+    check_sample_file(sample_path, sample_count, length, dtype)
+    samples = np.memmap(sample_path, dtype=dtype, mode="r", shape=(sample_count, length, len(FIELDS)))
+
+    selected_count = int(mask.sum())
+    if selected_count == 0:
+        raise ValueError("selected timestep window contains no profile samples")
+
+    sums = np.zeros((length, len(FIELDS)), dtype=np.float64)
+    for start in range(0, sample_count, chunk_samples):
+        stop = min(start + chunk_samples, sample_count)
+        chunk_mask = mask[start:stop]
+        if not np.any(chunk_mask):
+            continue
+
+        chunk = np.asarray(samples[start:stop][chunk_mask], dtype=np.float64)
+        sums += chunk.sum(axis=0)
+
+    mean = sums / float(selected_count)
+    if sample_velocity_scale <= 0.0:
+        raise ValueError("sample_velocity_scale must be positive")
+
+    inv_sample_velocity_scale = 1.0 / sample_velocity_scale
+    inv_sample_velocity_scale2 = inv_sample_velocity_scale * inv_sample_velocity_scale
+    mean_ux = mean[:, 0] * inv_sample_velocity_scale
+    mean_uz = mean[:, 1] * inv_sample_velocity_scale
+    mean_ux2 = mean[:, 2] * inv_sample_velocity_scale2
+    mean_uz2 = mean[:, 3] * inv_sample_velocity_scale2
+    mean_uxuz = mean[:, 4] * inv_sample_velocity_scale2
 
     ux_rms = np.sqrt(np.maximum(mean_ux2 - mean_ux * mean_ux, 0.0))
     uz_rms = np.sqrt(np.maximum(mean_uz2 - mean_uz * mean_uz, 0.0))
@@ -182,6 +232,35 @@ def write_profile(path: Path, profile: dict[str, np.ndarray], sample_count: int)
         writer.writerow(columns)
         for i in range(profile["s"].size):
             writer.writerow([profile[name][i] if name != "samples" else sample_count for name in columns])
+
+
+def print_extracted_profile_summary(profiles: dict[str, dict[str, np.ndarray]], sample_count: int) -> None:
+    print("extracted profile coordinates:", flush=True)
+    for name in ("cx", "cy"):
+        s = profiles[name]["s"]
+        print(
+            f"  centerline_{name}: s_min={float(np.min(s)):.17g}, "
+            f"s_max={float(np.max(s)):.17g}, points={s.size}, samples={sample_count}",
+            flush=True,
+        )
+
+    wall_nodes = (
+        ("west wall", "cx", int(np.argmin(profiles["cx"]["s"]))),
+        ("east wall", "cx", int(np.argmax(profiles["cx"]["s"]))),
+        ("bottom wall", "cy", int(np.argmin(profiles["cy"]["s"]))),
+        ("lid wall", "cy", int(np.argmax(profiles["cy"]["s"]))),
+    )
+
+    print("wall-node fluctuation statistics (nondimensional):", flush=True)
+    for wall_name, profile_name, index in wall_nodes:
+        profile = profiles[profile_name]
+        print(
+            f"  {wall_name} centerline_{profile_name} s={float(profile['s'][index]):.17g}: "
+            f"ux_rms={float(profile['ux_rms'][index]):.17g}, "
+            f"uz_rms={float(profile['uz_rms'][index]):.17g}, "
+            f"uxuz_cov={float(profile['uxuz'][index]):.17g}",
+            flush=True,
+        )
 
 
 def compute_metrics(s_ref: np.ndarray, q_ref: np.ndarray, q_sim: np.ndarray) -> dict[str, float]:
@@ -263,37 +342,61 @@ def main() -> int:
     processed_profile_dir.mkdir(parents=True, exist_ok=True)
 
     metadata = read_key_value_csv(profile_dir / "metadata.csv")
-    sample_count = int(metadata["sample_count"])
     cx_length = int(metadata["cx_length"])
     cy_length = int(metadata["cy_length"])
     u_char = float(metadata["u_char"])
+    sample_velocity_scale = float(metadata.get("sample_velocity_scale", "3.0"))
     dtype = dtype_from_metadata(metadata)
+    target_reynolds = case_reynolds(args.case_id)
 
     steps = read_steps(profile_dir / "sample_steps.csv")
-    if steps.size != sample_count:
-        raise ValueError(f"sample_steps.csv has {steps.size} steps, expected {sample_count}")
+    sample_count = int(steps.size)
+    if sample_count == 0:
+        raise ValueError("sample_steps.csv contains no profile samples")
 
-    mask = select_steps(steps, args.step_min, args.step_max)
+    mask, dropped_duplicate_samples = select_steps(steps, args.step_min, args.step_max)
     selected_steps = steps[mask]
     selected_sample_count = int(mask.sum())
 
     profiles = {
-        "cx": compute_window_profile(
-            read_samples(profile_dir / "centerline_cx_samples.bin", sample_count, cx_length, dtype),
-            read_coordinates(profile_dir / "centerline_cx_coordinates.csv", cx_length),
-            mask,
-            u_char,
-        ),
-        "cy": compute_window_profile(
-            read_samples(profile_dir / "centerline_cy_samples.bin", sample_count, cy_length, dtype),
-            read_coordinates(profile_dir / "centerline_cy_coordinates.csv", cy_length),
-            mask,
-            u_char,
-        ),
+        "cx": None,
+        "cy": None,
     }
+    print(f"selected steps {int(selected_steps.min())}..{int(selected_steps.max())} ({selected_sample_count} samples)", flush=True)
+    if dropped_duplicate_samples:
+        print(f"ignored {dropped_duplicate_samples} duplicate timestep samples, keeping the last occurrence", flush=True)
+    print(f"using reference Reynolds {target_reynolds}", flush=True)
+    print(f"sample velocity scale to physical units: {sample_velocity_scale:g}", flush=True)
+    print(f"processing centerline_cx_samples.bin in chunks of {args.chunk_samples} samples", flush=True)
+    profiles["cx"] = compute_window_profile(
+        profile_dir / "centerline_cx_samples.bin",
+        sample_count,
+        read_coordinates(profile_dir / "centerline_cx_coordinates.csv", cx_length),
+        mask,
+        dtype,
+        u_char,
+        sample_velocity_scale,
+        args.chunk_samples,
+    )
+    print(f"processing centerline_cy_samples.bin in chunks of {args.chunk_samples} samples", flush=True)
+    profiles["cy"] = compute_window_profile(
+        profile_dir / "centerline_cy_samples.bin",
+        sample_count,
+        read_coordinates(profile_dir / "centerline_cy_coordinates.csv", cy_length),
+        mask,
+        dtype,
+        u_char,
+        sample_velocity_scale,
+        args.chunk_samples,
+    )
+
+    print_extracted_profile_summary(profiles, selected_sample_count)
 
     write_profile(processed_profile_dir / "centerline_cx.csv", profiles["cx"], selected_sample_count)
     write_profile(processed_profile_dir / "centerline_cy.csv", profiles["cy"], selected_sample_count)
+
+    for stale_plot in plot_dir.glob("*.png"):
+        stale_plot.unlink()
 
     rows: list[dict[str, object]] = []
     for reference_path in sorted(reference_dir.glob("*.csv")):
@@ -301,11 +404,15 @@ def main() -> int:
         if not match:
             continue
 
-        reference_variable, profile, reynolds, station = match.groups()
-        sim_column, label = VARIABLE_MAP[reference_variable]
+        reference_variable, profile, reynolds = match.groups()
+        if reynolds != target_reynolds:
+            continue
+
+        sim_column, label, reference_plot_scale = VARIABLE_MAP[reference_variable]
         profile_data = profiles[profile]
 
         s_ref, q_ref = read_reference_curve(reference_path, profile)
+        q_ref = q_ref / reference_plot_scale
         s_ref, q_ref = sorted_unique_average(s_ref, q_ref)
         s_sim, q_sim_profile = sorted_unique_average(profile_data["s"], profile_data[sim_column])
 
@@ -331,7 +438,7 @@ def main() -> int:
                 "reference_variable": reference_variable,
                 "simulation_column": sim_column,
                 "reynolds": reynolds,
-                "station": station,
+                "reference_plot_scale": reference_plot_scale,
                 "window_step_min": int(selected_steps.min()),
                 "window_step_max": int(selected_steps.max()),
                 "window_samples": selected_sample_count,
@@ -351,7 +458,6 @@ def main() -> int:
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"selected steps {int(selected_steps.min())}..{int(selected_steps.max())} ({selected_sample_count} samples)")
     print(f"wrote {metrics_path}")
     print(f"wrote plots to {plot_dir}")
     return 0

@@ -313,8 +313,8 @@ static inline void writeOutput(
 
     const std::string base = outputStepName(step);
     const std::filesystem::path binaryPath = dir / (base + ".bin");
-    const std::filesystem::path vtiPath = dir / (base + ".vti");
+    // const std::filesystem::path vtiPath = dir / (base + ".vti");
 
     writeBinary(deviceMoments, binaryPath);
-    writeVti(binaryPath, vtiPath);
+    // writeVti(binaryPath, vtiPath);
 }

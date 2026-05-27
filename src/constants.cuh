@@ -34,7 +34,7 @@ constexpr natural_t L_CHAR = 256;
 constexpr real_t U_CHAR = static_cast<real_t>(0.05);
 constexpr real_t REYNOLDS = static_cast<real_t>(10000);
 constexpr natural_t NSTEPS = 500000;
-constexpr natural_t STAMP = 1000;
+constexpr natural_t STAMP = 10000;
 
 // =================================================================================================== //
 

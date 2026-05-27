@@ -113,7 +113,7 @@ int main(int argc, char **argv)
     }
 
 #ifndef BENCHMARK
-    CUDA_CHECK(initLdcProfileSamples(ldcProfiles, NSTEPS > startStep ? NSTEPS - startStep : 0));
+    CUDA_CHECK(initLdcProfileSamples(ldcProfiles, getSimulationOutputDirectory(), continueFromCheckpoint));
 #endif
 
     std::cout << std::endl;
